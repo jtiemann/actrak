@@ -1,6 +1,6 @@
 # Activity Tracker Application
 
-A component-based Node.js application for tracking activity_types , goals, and achievements with a central event bus architecture.
+A component-based Node.js application for tracking activities, goals, and achievements with a central event bus architecture.
 
 ## Architecture Overview
 
@@ -23,7 +23,7 @@ This application uses a component-based architecture with a central event bus fo
 
 - **Database**: Handles database connections and operations
 - **Auth**: Manages user authentication, token validation, and authorization
-- **Activity**: Handles tracking of user activity_types  and logs
+- **Activity**: Handles tracking of user activities and logs
 - **Goal**: Manages user goals and goal progress
 - **Achievement**: Handles user achievements and badges
 - **Notification**: Manages email notifications, reminders, and reports
@@ -41,7 +41,7 @@ src/
 │
 ├── components/            # Application components
 │   ├── auth/              # Authentication component
-│   ├── activity_types /        # activity_types  management component
+│   ├── activities/        # Activities management component
 │   ├── goals/             # Goals tracking component
 │   ├── achievements/      # Achievements component
 │   ├── notifications/     # Notification services component
@@ -111,7 +111,7 @@ this.subscribe('user:created', this._handleUserCreated.bind(this));
 API endpoints are organized by resource:
 
 - `/api/auth`: Authentication endpoints
-- `/api/activity_types `: Activity management
+- `/api/activities`: Activity management
 - `/api/logs`: Activity logging
 - `/api/goals`: Goal management
 - `/api/achievements`: Achievement system

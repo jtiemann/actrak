@@ -475,16 +475,16 @@ class ApiClient {
    */
   
   /**
-   * Get all activity_types  for current user
+   * Get all activities for current user
    * @returns {Promise<Array>} Activity list
    */
-  async getactivity_types () {
+  async getActivities() {
     const user = this._getUser();
     if (!user) {
       throw new Error('User not authenticated');
     }
     
-    return this.request(`/activity_types /${user.id}`);
+    return this.request(`/activities/${user.id}`);
   }
   
   /**
@@ -493,7 +493,7 @@ class ApiClient {
    * @returns {Promise<Object>} Activity data
    */
   async getActivity(activityId) {
-    return this.request(`/activity_types /details/${activityId}`);
+    return this.request(`/activities/details/${activityId}`);
   }
   
   /**
@@ -517,15 +517,15 @@ class ApiClient {
       isPublic: false
     });
     
-    const result = await this.request('/activity_types ', 'POST', {
+    const result = await this.request('/activities', 'POST', {
       userId: user.id,
       name,
       unit,
       isPublic: false
     });
     
-    // Clear activity_types  cache
-    this.clearCache(`/activity_types /${user.id}`);
+    // Clear activities cache
+    this.clearCache(`/activities/${user.id}`);
     
     return result;
   }
@@ -541,15 +541,15 @@ class ApiClient {
   async updateActivity(activityId, name, unit, isPublic = false) {
     const user = this._getUser();
     
-    const result = await this.request(`/activity_types /${activityId}`, 'PUT', {
+    const result = await this.request(`/activities/${activityId}`, 'PUT', {
       name,
       unit,
       isPublic
     });
     
-    // Clear activity_types  cache
+    // Clear activities cache
     if (user) {
-      this.clearCache(`/activity_types /${user.id}`);
+      this.clearCache(`/activities/${user.id}`);
     }
     
     return result;
@@ -563,11 +563,11 @@ class ApiClient {
   async deleteActivity(activityId) {
     const user = this._getUser();
     
-    const result = await this.request(`/activity_types /${activityId}`, 'DELETE');
+    const result = await this.request(`/activities/${activityId}`, 'DELETE');
     
-    // Clear activity_types  cache
+    // Clear activities cache
     if (user) {
-      this.clearCache(`/activity_types /${user.id}`);
+      this.clearCache(`/activities/${user.id}`);
     }
     
     return result;
@@ -583,7 +583,7 @@ class ApiClient {
       throw new Error('User not authenticated');
     }
     
-    return this.request(`/activity_types /categories/${user.id}`);
+    return this.request(`/activities/categories/${user.id}`);
   }
   
   /**

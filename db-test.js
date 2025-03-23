@@ -85,13 +85,13 @@ async function testDatabase() {
     // Test activity_types table
     console.log('Testing activity_types table...');
     try {
-      const activity_types Result = await client.query('SELECT COUNT(*) FROM activity_types');
-      console.log(`Found ${activity_types Result.rows[0].count} activity_types  in the database`);
+      const activitiesResult = await client.query('SELECT COUNT(*) FROM activity_types');
+      console.log(`Found ${activitiesResult.rows[0].count} activities in the database`);
       
-      if (parseInt(activity_types Result.rows[0].count) > 0) {
-        // List some activity_types 
-        const activity_types  = await client.query('SELECT * FROM activity_types LIMIT 5');
-        console.log('activity_types  sample:', activity_types .rows);
+      if (parseInt(activitiesResult.rows[0].count) > 0) {
+        // List some activities
+        const activities = await client.query('SELECT * FROM activity_types LIMIT 5');
+        console.log('Activities sample:', activities.rows);
       }
     } catch (error) {
       console.error('Error testing activity_types table:', error);

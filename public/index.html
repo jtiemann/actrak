@@ -15,6 +15,60 @@
     <!-- Custom styles -->
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/goals.css">
+    
+    <!-- Critical inline script to fix goal form -->
+    <script>
+      // This runs as soon as the page starts loading
+      document.addEventListener('DOMContentLoaded', function() {
+        // Function to directly fix the goal form activity
+        window.fixGoalFormActivity = function() {
+          console.log("Inline fix: Attempting to set goal activity");
+          const activitySelect = document.getElementById('activity-type');
+          const goalActivityInput = document.getElementById('goal-activity');
+          
+          if (activitySelect && goalActivityInput) {
+            const selectedOption = activitySelect.options[activitySelect.selectedIndex];
+            if (selectedOption) {
+              console.log("Inline fix: Setting activity to " + selectedOption.textContent);
+              goalActivityInput.value = selectedOption.textContent;
+              return true;
+            }
+          }
+          return false;
+        };
+        
+        // Function to set default count
+        window.setDefaultTargetCount = function() {
+          const targetCountInput = document.getElementById('goal-target-count');
+          if (targetCountInput && (!targetCountInput.value || targetCountInput.value === '0')) {
+            targetCountInput.value = '1';
+          }
+        };
+        
+        // Add a direct click handler to the Add Goal button
+        document.addEventListener('click', function(e) {
+          if (e.target.id === 'add-goal-btn' || 
+              (e.target.closest && e.target.closest('#add-goal-btn'))) {
+            console.log("Inline fix: Add Goal button clicked");
+            setTimeout(function() {
+              window.fixGoalFormActivity();
+              window.setDefaultTargetCount();
+            }, 100);
+          }
+        }, true);
+        
+        // Set an interval to keep checking
+        setInterval(function() {
+          const formContainer = document.getElementById('goal-form-container');
+          if (formContainer && 
+              !formContainer.classList.contains('hidden') && 
+              formContainer.style.display !== 'none') {
+            window.fixGoalFormActivity();
+            window.setDefaultTargetCount();
+          }
+        }, 500);
+      });
+    </script>
 </head>
 <body>
     <!-- Skip to content link for accessibility -->
@@ -148,7 +202,14 @@
         </div>
     </div>
 
-    <!-- Custom scripts -->
+    <!-- Our most aggressive fixes go first -->
+    <script src="js/inject-goal-fix.js"></script>
+    <script src="js/fix-goal-form-direct.js"></script>
+    <script src="js/fix-goal-form-validation.js"></script>
+    <script src="js/fix-duplicate-goals.js"></script>
+    <script src="js/fix-goal-progress-reactivity.js"></script>
+    
+    <!-- Regular scripts -->
     <script src="js/theme.js"></script>
     <script src="js/charts.js"></script>
     <script src="js/mobile-nav.js"></script>
@@ -157,6 +218,7 @@
     <script src="js/auth-fix.js"></script>
     <script src="js/api.js"></script>
     <script src="js/fix-api-client.js"></script>
+    <script src="js/fix-activity-globals.js"></script>
     <script src="js/direct-api.js"></script>
     <script src="js/app.js"></script>
 
@@ -174,7 +236,7 @@
                 </div>
                 <div class="form-group">
                     <label for="goal-target-count">Target Count</label>
-                    <input type="number" id="goal-target-count" min="1" placeholder="e.g. 100" required>
+                    <input type="number" id="goal-target-count" min="1" value="1" placeholder="e.g. 10" required>
                 </div>
                 <div class="form-group">
                     <label for="goal-period-type">Period Type</label>
@@ -204,9 +266,90 @@
     <!-- New goal form script -->
     <script src="js/goal-form.js"></script>
     <script src="js/goals.js"></script>
+    <script src="js/fix-goal-form.js"></script>
     <script src="js/fix-goal-current-activity.js"></script>
     <script src="js/fix-activity-selector.js"></script>
     <script src="js/fix-goal-progress-display.js"></script>
     <script src="js/debug-goals.js"></script>
+    
+    <!-- Emergency fix that runs after everything else -->
+    <script>
+      // Last resort fix that runs after everything else has loaded
+      window.addEventListener('load', function() {
+        console.log("Page load completed - applying emergency fix");
+        
+        // Check every 250ms if the goal form is visible and fix it
+        const emergencyInterval = setInterval(function() {
+          const formContainer = document.getElementById('goal-form-container');
+          if (formContainer && 
+              !formContainer.classList.contains('hidden') && 
+              formContainer.style.display !== 'none') {
+            
+            const activitySelect = document.getElementById('activity-type');
+            const goalActivityInput = document.getElementById('goal-activity');
+            
+            if (activitySelect && goalActivityInput) {
+              // If the field is empty, fill it
+              if (!goalActivityInput.value) {
+                const selectedOption = activitySelect.options[activitySelect.selectedIndex];
+                if (selectedOption) {
+                  console.log("Emergency fix setting activity to: " + selectedOption.textContent);
+                  goalActivityInput.value = selectedOption.textContent;
+                }
+              }
+            }
+            
+            // Also set default target count
+            const targetCountInput = document.getElementById('goal-target-count');
+            if (targetCountInput && (!targetCountInput.value || targetCountInput.value === '0')) {
+              targetCountInput.value = '1';
+              console.log("Emergency fix setting target count to 1");
+            }
+          }
+          
+          // Also check for duplicate goals
+          const goalsContainer = document.getElementById('goals-container');
+          if (goalsContainer) {
+            const goalCards = goalsContainer.querySelectorAll('.goal-card');
+            const goalIds = new Set();
+            const duplicates = [];
+            
+            goalCards.forEach(function(card) {
+              const id = card.dataset.goalId;
+              if (id) {
+                if (goalIds.has(id)) {
+                  duplicates.push(card);
+                } else {
+                  goalIds.add(id);
+                }
+              }
+            });
+            
+            // Remove duplicates
+            duplicates.forEach(function(card) {
+              console.log("Emergency fix removing duplicate goal: " + card.dataset.goalId);
+              card.remove();
+            });
+          }
+        }, 250);
+        
+        // Let it run for 30 seconds after page load
+        setTimeout(function() {
+          clearInterval(emergencyInterval);
+        }, 30000);
+        
+        // Add a click handler to the log button to refresh goals
+        const logButton = document.getElementById('log-button');
+        if (logButton) {
+          logButton.addEventListener('click', function() {
+            console.log("Emergency log button click handler - will refresh goals");
+            setTimeout(function() {
+              // Refresh goals by triggering a custom event
+              document.dispatchEvent(new CustomEvent('actrak:logActivitySuccess'));
+            }, 1000);
+          });
+        }
+      });
+    </script>
 </body>
 </html>
