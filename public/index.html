@@ -20,6 +20,8 @@
     <script>
       // This runs as soon as the page starts loading
       document.addEventListener('DOMContentLoaded', function() {
+        console.log("Critical inline goal form fix loaded");
+        
         // Function to directly fix the goal form activity
         window.fixGoalFormActivity = function() {
           console.log("Inline fix: Attempting to set goal activity");
@@ -37,36 +39,111 @@
           return false;
         };
         
-        // Function to set default count
+        // Function to set default count - improved to use 10 instead of 1
         window.setDefaultTargetCount = function() {
           const targetCountInput = document.getElementById('goal-target-count');
           if (targetCountInput && (!targetCountInput.value || targetCountInput.value === '0')) {
-            targetCountInput.value = '1';
+            targetCountInput.value = '10'; // Now using 10 as the default
+            console.log("Inline fix: Setting target count to 10");
           }
         };
         
-        // Add a direct click handler to the Add Goal button
-        document.addEventListener('click', function(e) {
-          if (e.target.id === 'add-goal-btn' || 
-              (e.target.closest && e.target.closest('#add-goal-btn'))) {
-            console.log("Inline fix: Add Goal button clicked");
-            setTimeout(function() {
-              window.fixGoalFormActivity();
-              window.setDefaultTargetCount();
-            }, 100);
+        // Function to set default dates
+        window.setDefaultDates = function() {
+          const startDateInput = document.getElementById('goal-start-date');
+          const endDateInput = document.getElementById('goal-end-date');
+          
+          if (startDateInput && !startDateInput.value) {
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+            startDateInput.value = todayStr;
+            console.log("Inline fix: Setting start date to today:", todayStr);
+            
+            // Also try setting defaultValue
+            startDateInput.defaultValue = todayStr;
+            
+            // And setAttribute - belt and suspenders approach
+            startDateInput.setAttribute('value', todayStr);
           }
-        }, true);
+          
+          if (endDateInput && !endDateInput.value) {
+            const endDate = new Date();
+            endDate.setDate(endDate.getDate() + 30); // 30 days from now
+            const endDateStr = endDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+            endDateInput.value = endDateStr;
+            console.log("Inline fix: Setting end date to 30 days from now:", endDateStr);
+            
+            // Also try setting defaultValue
+            endDateInput.defaultValue = endDateStr;
+            
+            // And setAttribute
+            endDateInput.setAttribute('value', endDateStr);
+          }
+        };
+      });
+    </script>
+    
+    <!-- Immediate fix for date fields - most aggressive approach -->
+    <script>
+      // Set default dates for goal form - runs as early as possible
+      document.addEventListener('DOMContentLoaded', function() {
+        // Function to format a date as YYYY-MM-DD
+        function formatDate(date) {
+          return date.toISOString().split('T')[0];
+        }
         
-        // Set an interval to keep checking
-        setInterval(function() {
-          const formContainer = document.getElementById('goal-form-container');
-          if (formContainer && 
-              !formContainer.classList.contains('hidden') && 
-              formContainer.style.display !== 'none') {
-            window.fixGoalFormActivity();
-            window.setDefaultTargetCount();
+        // Set up a MutationObserver to watch for when the form becomes visible
+        const observer = new MutationObserver(function(mutations) {
+          for (const mutation of mutations) {
+            if (mutation.target.id === 'goal-form-container' && 
+                (mutation.attributeName === 'style' || mutation.attributeName === 'class')) {
+              
+              const formContainer = mutation.target;
+              if (!formContainer.classList.contains('hidden') && 
+                  formContainer.style.display !== 'none') {
+                
+                // Form is visible - set dates
+                const today = new Date();
+                const endDate = new Date();
+                endDate.setDate(today.getDate() + 30);
+                
+                const startDateInput = document.getElementById('goal-start-date');
+                const endDateInput = document.getElementById('goal-end-date');
+                
+                if (startDateInput) startDateInput.value = formatDate(today);
+                if (endDateInput) endDateInput.value = formatDate(endDate);
+                
+                console.log("Immediate fix: Set date defaults in mutation observer");
+              }
+            }
           }
-        }, 500);
+        });
+        
+        // Start observing as soon as possible
+        const formContainer = document.getElementById('goal-form-container');
+        if (formContainer) {
+          observer.observe(formContainer, { attributes: true });
+        }
+        
+        // Also add direct event listener to add goal button
+        const addGoalBtn = document.getElementById('add-goal-btn');
+        if (addGoalBtn) {
+          addGoalBtn.addEventListener('click', function() {
+            setTimeout(function() {
+              const today = new Date();
+              const endDate = new Date();
+              endDate.setDate(today.getDate() + 30);
+              
+              const startDateInput = document.getElementById('goal-start-date');
+              const endDateInput = document.getElementById('goal-end-date');
+              
+              if (startDateInput) startDateInput.value = formatDate(today);
+              if (endDateInput) endDateInput.value = formatDate(endDate);
+              
+              console.log("Immediate fix: Set date defaults after button click");
+            }, 10);
+          }, true); // Use capture phase to run first
+        }
       });
     </script>
 </head>
@@ -203,6 +280,9 @@
     </div>
 
     <!-- Our most aggressive fixes go first -->
+    <script src="js/fix-goal-target-count.js"></script>
+    <script src="js/override-goal-form-html.js"></script>
+    <script src="js/fix-goal-date-fields.js"></script>
     <script src="js/inject-goal-fix.js"></script>
     <script src="js/fix-goal-form-direct.js"></script>
     <script src="js/fix-goal-form-validation.js"></script>
@@ -236,7 +316,7 @@
                 </div>
                 <div class="form-group">
                     <label for="goal-target-count">Target Count</label>
-                    <input type="number" id="goal-target-count" min="1" value="1" placeholder="e.g. 10" required>
+                    <input type="number" id="goal-target-count" min="1" value="10" placeholder="e.g. 10, 100, 30.5" required>
                 </div>
                 <div class="form-group">
                     <label for="goal-period-type">Period Type</label>
@@ -270,6 +350,7 @@
     <script src="js/fix-goal-current-activity.js"></script>
     <script src="js/fix-activity-selector.js"></script>
     <script src="js/fix-goal-progress-display.js"></script>
+    <script src="js/fix-goal-form-complete.js"></script>
     <script src="js/debug-goals.js"></script>
     
     <!-- Emergency fix that runs after everything else -->
@@ -277,6 +358,14 @@
       // Last resort fix that runs after everything else has loaded
       window.addEventListener('load', function() {
         console.log("Page load completed - applying emergency fix");
+        
+        // Function to format a date as YYYY-MM-DD
+        function formatDate(date) {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
         
         // Check every 250ms if the goal form is visible and fix it
         const emergencyInterval = setInterval(function() {
@@ -299,11 +388,28 @@
               }
             }
             
-            // Also set default target count
+            // Also set default target count if it's empty or zero
             const targetCountInput = document.getElementById('goal-target-count');
             if (targetCountInput && (!targetCountInput.value || targetCountInput.value === '0')) {
-              targetCountInput.value = '1';
-              console.log("Emergency fix setting target count to 1");
+              targetCountInput.value = '10'; // Changed to 10 from 1
+              console.log("Emergency fix setting target count to 10");
+            }
+            
+            // Force set default dates if they're missing
+            const startDateInput = document.getElementById('goal-start-date');
+            const endDateInput = document.getElementById('goal-end-date');
+            
+            if (startDateInput && !startDateInput.value) {
+              const today = new Date();
+              startDateInput.value = formatDate(today);
+              console.log("Emergency fix setting start date to today:", startDateInput.value);
+            }
+            
+            if (endDateInput && !endDateInput.value) {
+              const endDate = new Date();
+              endDate.setDate(endDate.getDate() + 30); // 30 days from now
+              endDateInput.value = formatDate(endDate);
+              console.log("Emergency fix setting end date to 30 days ahead:", endDateInput.value);
             }
           }
           
