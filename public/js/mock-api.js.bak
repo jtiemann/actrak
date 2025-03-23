@@ -15,7 +15,7 @@
         users: [
             { user_id: 1, username: 'demo', email: 'demo@example.com', password: 'password' }
         ],
-        activities: [
+        activity_types : [
             { activity_type_id: 1, name: 'Running', unit: 'miles', user_id: 1 },
             { activity_type_id: 2, name: 'Push-ups', unit: 'reps', user_id: 1 },
             { activity_type_id: 3, name: 'Meditation', unit: 'minutes', user_id: 1 }
@@ -93,10 +93,10 @@
                 status = 401;
                 responseData = { error: 'Invalid credentials' };
             }
-        } else if (path.match(/^\/activities\/\d+$/) && method === 'GET') {
+        } else if (path.match(/^\/activity_types \/\d+$/) && method === 'GET') {
             const userId = parseInt(path.split('/').pop());
-            responseData = db.activities.filter(a => a.user_id === userId);
-        } else if (path === '/activities' && method === 'POST') {
+            responseData = db.activity_types .filter(a => a.user_id === userId);
+        } else if (path === '/activity_types ' && method === 'POST') {
             responseData = handleCreateActivity(body);
         } else if (path.match(/^\/logs\/\d+\/\d+$/) && method === 'GET') {
             const parts = path.split('/');
@@ -189,13 +189,13 @@
         }
         
         const newActivity = {
-            activity_type_id: getNextId(db.activities, 'activity_type_id'),
+            activity_type_id: getNextId(db.activity_types , 'activity_type_id'),
             name: body.name,
             unit: body.unit,
             user_id: body.userId || 1
         };
         
-        db.activities.push(newActivity);
+        db.activity_types .push(newActivity);
         
         return newActivity;
     }
@@ -235,7 +235,7 @@
             return { error: 'Invalid goal data' };
         }
         
-        const activity = db.activities.find(a => a.activity_type_id === body.activityTypeId);
+        const activity = db.activity_types .find(a => a.activity_type_id === body.activityTypeId);
         
         const newGoal = {
             goal_id: getNextId(db.goals, 'goal_id'),

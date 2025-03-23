@@ -61,11 +61,11 @@ async function setupDatabase() {
     `);
     console.log('Users table created successfully');
     
-    // Create activities table
-    console.log('Creating activities table...');
+    // Create activity_types  table
+    console.log('Creating activity_types  table...');
     await client.query(`
-      CREATE TABLE IF NOT EXISTS activities (
-        activity_id SERIAL PRIMARY KEY,
+      CREATE TABLE IF NOT EXISTS activity_types  (
+        activity_type_id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
         name VARCHAR(100) NOT NULL,
         description TEXT,
@@ -74,14 +74,14 @@ async function setupDatabase() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    console.log('Activities table created successfully');
+    console.log('activity_types  table created successfully');
     
     // Create activity_logs table
     console.log('Creating activity_logs table...');
     await client.query(`
       CREATE TABLE IF NOT EXISTS activity_logs (
         log_id SERIAL PRIMARY KEY,
-        activity_id INTEGER NOT NULL REFERENCES activities(activity_id) ON DELETE CASCADE,
+        activity_type_id INTEGER NOT NULL REFERENCES activity_types (activity_type_id) ON DELETE CASCADE,
         user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
         duration INTEGER NOT NULL, -- in minutes
         date TIMESTAMP NOT NULL,
@@ -97,7 +97,7 @@ async function setupDatabase() {
       CREATE TABLE IF NOT EXISTS goals (
         goal_id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-        activity_id INTEGER REFERENCES activities(activity_id) ON DELETE SET NULL,
+        activity_type_id INTEGER REFERENCES activity_types (activity_type_id) ON DELETE SET NULL,
         name VARCHAR(100) NOT NULL,
         description TEXT,
         target_value INTEGER NOT NULL,

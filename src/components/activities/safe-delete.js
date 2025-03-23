@@ -1,0 +1,167 @@
+/**
+ * Safe deletion functions for activity_typeswith foreign key constraints
+ */
+const Component = require('../../core/component-class');
+
+/**
+ * Safely delete an activity and all its related data
+ * @param {object} db - Database connection
+ * @param {number} activityId - Activity ID to delete
+ * @param {number} userId - User ID for verification
+ * @returns {Promise<boolean>} Success status
+ */
+async function safelyDeleteActivity(db, activityId, userId) {
+  const client = await db.pool.connect();
+  
+  try {
+    // Start transaction
+    await client.query('BEGIN');
+    
+    // Verify activity exists and belongs to user
+    const activityCheck = await client.query(
+      'SELECT * FROM activity_typesWHERE activity_type_id = $1 AND user_id = $2',
+      [activityId, userId]
+    );
+    
+    if (activityCheck.rowCount === 0) {
+      throw new Error('Activity not found or does not belong to user');
+    }
+    
+    console.log(`[Safe Delete] Deleting activity ${activityId} for user ${userId}`);
+    
+    // Step 1: Delete all related goals first
+    console.log(`[Safe Delete] Deleting goals related to activity ${activityId}`);
+    const deleteGoals = await client.query(
+      'DELETE FROM goals WHERE activity_type_id = $1 AND user_id = $2',
+      [activityId, userId]
+    );
+    console.log(`[Safe Delete] Deleted ${deleteGoals.rowCount} goals`);
+    
+    // Step 2: Delete all activity logs
+    console.log(`[Safe Delete] Deleting logs related to activity ${activityId}`);
+    const deleteLogs = await client.query(
+      'DELETE FROM activity_logs WHERE activity_type_id = $1 AND user_id = $2',
+      [activityId, userId]
+    );
+    console.log(`[Safe Delete] Deleted ${deleteLogs.rowCount} logs`);
+    
+    // Step 3: Finally, delete the activity
+    console.log(`[Safe Delete] Deleting activity ${activityId}`);
+    const deleteActivity = await client.query(
+      'DELETE FROM activity_typesWHERE activity_type_id = $1 AND user_id = $2',
+      [activityId, userId]
+    );
+    
+    if (deleteActivity.rowCount === 0) {
+      throw new Error('Failed to delete activity');
+    }
+    
+    // Commit transaction
+    await client.query('COMMIT');
+    console.log(`[Safe Delete] Successfully deleted activity ${activityId} and all related data`);
+    
+    return true;
+  } catch (error) {
+    // Rollback transaction on error
+    await client.query('ROLLBACK');
+    console.error('[Safe Delete] Error:', error.message);
+    throw error;
+  } finally {
+    // Release client
+    client.release();
+  }
+}
+
+/**
+ * Update activity with proper handling of foreign key constraints
+ * @param {object} db - Database connection
+ * @param {number} activityId - Activity ID to update
+ * @param {number} userId - User ID for verification
+ * @param {object} updateData - Object with fields to update
+ * @returns {Promise<object>} Updated activity
+ */
+async function safelyUpdateActivity(db, activityId, userId, updateData) {
+  const client = await db.pool.connect();
+  
+  try {
+    // Start transaction
+    await client.query('BEGIN');
+    
+    // Verify activity exists and belongs to user
+    const activityCheck = await client.query(
+      'SELECT * FROM activity_typesWHERE activity_type_id = $1 AND user_id = $2',
+      [activityId, userId]
+    );
+    
+    if (activityCheck.rowCount === 0) {
+      throw new Error('Activity not found or does not belong to user');
+    }
+    
+    // Get existing activity data
+    const existingActivity = activityCheck.rows[0];
+    
+    // Create update query parts
+    const updates = [];
+    const values = [activityId];
+    let paramIndex = 2;
+    
+    // Handle name update
+    if (updateData.name) {
+      updates.push(`name = $${paramIndex++}`);
+      values.push(updateData.name);
+    }
+    
+    // Handle unit update
+    if (updateData.unit) {
+      updates.push(`unit = $${paramIndex++}`);
+      values.push(updateData.unit);
+    }
+    
+    // Handle is_public update
+    if (updateData.isPublic !== undefined) {
+      updates.push(`is_public = $${paramIndex++}`);
+      values.push(updateData.isPublic);
+    }
+    
+    // Handle category update
+    if (updateData.category) {
+      updates.push(`category = $${paramIndex++}`);
+      values.push(updateData.category);
+    }
+    
+    // Add updated_at timestamp
+    updates.push(`updated_at = NOW()`);
+    
+    // If no updates, return existing activity
+    if (updates.length === 0) {
+      return existingActivity;
+    }
+    
+    // Perform update
+    const updateQuery = `
+      UPDATE activity_typesSET ${updates.join(', ')} 
+      WHERE activity_type_id = $1 
+      RETURNING *
+    `;
+    
+    const updateResult = await client.query(updateQuery, values);
+    
+    // Commit transaction
+    await client.query('COMMIT');
+    
+    return updateResult.rows[0];
+  } catch (error) {
+    // Rollback transaction on error
+    await client.query('ROLLBACK');
+    console.error('[Safe Update] Error:', error.message);
+    throw error;
+  } finally {
+    // Release client
+    client.release();
+  }
+}
+
+module.exports = {
+  safelyDeleteActivity,
+  safelyUpdateActivity
+};

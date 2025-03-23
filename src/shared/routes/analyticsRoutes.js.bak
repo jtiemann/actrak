@@ -38,8 +38,9 @@ function analyticsRoutes(analyticsComponent) {
   
   /**
    * Get activity breakdown
-   * GET /api/analytics/user/:userId/activity_types*/
-  router.get('/user/:userId/activity_types', authenticateJWT, async (req, res, next) => {
+   * GET /api/analytics/user/:userId/activity_types 
+   */
+  router.get('/user/:userId/activity_types ', authenticateJWT, async (req, res, next) => {
     try {
       const userId = parseInt(req.params.userId);
       const { startDate, endDate, groupBy } = req.query;
@@ -214,17 +215,19 @@ function analyticsRoutes(analyticsComponent) {
   });
   
   /**
-   * Get most popular activity_types* GET /api/analytics/admin/popular-activity_types*/
-  router.get('/admin/popular-activity_types', authenticateJWT, isAdmin, async (req, res, next) => {
+   * Get most popular activity_types 
+   * GET /api/analytics/admin/popular-activity_types 
+   */
+  router.get('/admin/popular-activity_types ', authenticateJWT, isAdmin, async (req, res, next) => {
     try {
       const { limit } = req.query;
       
-      // Get popular activity_typesfrom analytics component
-      const activity_types= await analyticsComponent.getMostPopularactivity_types(
+      // Get popular activity_types  from analytics component
+      const activity_types  = await analyticsComponent.getMostPopularactivity_types (
         limit ? parseInt(limit) : 10
       );
       
-      res.json(activity_types);
+      res.json(activity_types );
     } catch (err) {
       next(err);
     }

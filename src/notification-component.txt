@@ -125,7 +125,7 @@ class NotificationComponent extends Component {
           Welcome to Activity Tracker! We're excited to have you on board.
           
           With Activity Tracker, you can:
-          - Track multiple activities with custom units
+          - Track multiple activity_types  with custom units
           - Set goals and earn achievements
           - View statistics and visualize your progress
           - Export your data to CSV or PDF
@@ -142,7 +142,7 @@ class NotificationComponent extends Component {
             <p>Welcome to Activity Tracker! We're excited to have you on board.</p>
             <p>With Activity Tracker, you can:</p>
             <ul>
-              <li>Track multiple activities with custom units</li>
+              <li>Track multiple activity_types  with custom units</li>
               <li>Set goals and earn achievements</li>
               <li>View statistics and visualize your progress</li>
               <li>Export your data to CSV or PDF</li>
@@ -266,7 +266,7 @@ class NotificationComponent extends Component {
           
           Here's your weekly Activity Tracker report:
           
-          {{#each activities}}
+          {{#each activity_types }}
           {{name}}:
           - This week: {{week}} {{unit}}
           - Last week: {{lastWeek}} {{unit}}
@@ -293,7 +293,7 @@ class NotificationComponent extends Component {
             
             <h2 style="color: #4361ee; margin-top: 30px;">Activity Summary</h2>
             <div style="margin-bottom: 20px;">
-            {{#each activities}}
+            {{#each activity_types }}
               <div style="margin-bottom: 15px; padding: 15px; border-radius: 5px; background-color: #f5f7fa;">
                 <h3 style="margin-top: 0;">{{name}}</h3>
                 <div style="display: flex; justify-content: space-between;">
@@ -833,13 +833,13 @@ class NotificationComponent extends Component {
         return false;
       }
       
-      // Get user's activities
-      const activities = await activityComponent.getAllActivities(user.user_id);
+      // Get user's activity_types 
+      const activity_types  = await activityComponent.getAllactivity_types (user.user_id);
       
       // Get activity stats for the week
       const activityStats = [];
       
-      for (const activity of activities) {
+      for (const activity of activity_types ) {
         // Get this week's stats
         const thisWeek = await this._getWeeklyTotal(user.user_id, activity.activity_type_id);
         
@@ -850,7 +850,7 @@ class NotificationComponent extends Component {
         const change = thisWeek - lastWeek;
         const percentChange = lastWeek > 0 ? Math.round((change / lastWeek) * 100) : 0;
         
-        // Only include activities with data
+        // Only include activity_types  with data
         if (thisWeek > 0 || lastWeek > 0) {
           activityStats.push({
             name: activity.name,
@@ -864,7 +864,7 @@ class NotificationComponent extends Component {
         }
       }
       
-      // If no activities with data, skip this user
+      // If no activity_types  with data, skip this user
       if (activityStats.length === 0) {
         return false;
       }
@@ -897,7 +897,7 @@ class NotificationComponent extends Component {
       // Render and send weekly report email
       const rendered = this._renderTemplate('weekly_report', {
         username: user.username,
-        activities: activityStats,
+        activity_types : activityStats,
         goals: goalStats
       });
       

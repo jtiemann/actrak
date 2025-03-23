@@ -34,6 +34,9 @@ class GoalComponent extends Component {
     // Register event handlers
     this.registerEvents();
     
+    // Log our initialization
+    console.log("[Goal] Component initialized");
+    
     return true;
   }
 
@@ -74,7 +77,7 @@ class GoalComponent extends Component {
             userId: data.userId,
             goalId: goal.goal_id,
             goalName: activity.name,
-            goalTarget: goal.target_count,
+            goalTarget: goal.target_value,
             goalUnit: activity.unit,
             goalPeriod: this._formatPeriodType(goal.period_type),
             timestamp: new Date()
@@ -95,7 +98,20 @@ class GoalComponent extends Component {
     try {
       const query = 'SELECT * FROM goals WHERE user_id = $1 ORDER BY created_at DESC';
       const result = await this.db.query(query, [userId]);
-      return result.rows;
+      
+      // Get activity names for all goals
+      const goals = result.rows;
+      for (const goal of goals) {
+        if (goal.activity_type_id) {
+          const activity = await this.activityComponent.getActivityById(goal.activity_type_id);
+          if (activity) {
+            goal.activity_name = activity.name;
+            goal.unit = activity.unit;
+          }
+        }
+      }
+      
+      return goals;
     } catch (error) {
       console.error('[Goal] Error getting user goals:', error);
       throw error;
@@ -128,7 +144,17 @@ class GoalComponent extends Component {
     try {
       const query = 'SELECT * FROM goals WHERE goal_id = $1';
       const result = await this.db.query(query, [goalId]);
-      return result.rows[0];
+      
+      const goal = result.rows[0];
+      if (goal && goal.activity_type_id) {
+        const activity = await this.activityComponent.getActivityById(goal.activity_type_id);
+        if (activity) {
+          goal.activity_name = activity.name;
+          goal.unit = activity.unit;
+        }
+      }
+      
+      return goal;
     } catch (error) {
       console.error('[Goal] Error getting goal by ID:', error);
       throw error;
@@ -144,41 +170,59 @@ class GoalComponent extends Component {
    */
   async createGoal(userId, activityId, goalData) {
     try {
-      // Create goal in database
+      // Get activity data first to include in the event
+      const activity = await this.activityComponent.getActivityById(activityId);
+      
+      if (!activity) {
+        throw new Error('Activity not found');
+      }
+      
+      // Create goal in database with required fields
       const query = `
         INSERT INTO goals (
           user_id, 
           activity_type_id, 
-          target_count, 
+          name,
+          description,
+          target_value, 
           period_type, 
           start_date, 
           end_date, 
-          name, 
-          description, 
           is_active
         ) 
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true) 
         RETURNING *
       `;
       
+      // Generate goal name from activity
+      const goalName = `${activity.name} Goal`;
+      const goalDescription = `Target: ${goalData.targetCount} ${activity.unit} (${this._formatPeriodType(goalData.periodType)})`;
+      
       const result = await this.db.query(query, [
         userId,
         activityId,
+        goalName, // Add name field
+        goalDescription, // Add description field
         goalData.targetCount,
         goalData.periodType,
         goalData.startDate,
-        goalData.endDate,
-        goalData.name,
-        goalData.description
+        goalData.endDate
       ]);
       
       const goal = result.rows[0];
       
-      // Publish goal created event
+      // Add activity data for the client
+      goal.activity_name = activity.name;
+      goal.unit = activity.unit;
+      
+      // Publish goal created event with activity data
       this.publish('goal:created', {
         goalId: goal.goal_id,
         userId,
         activityId,
+        activityName: activity.name,
+        activityUnit: activity.unit,
+        activityCategory: activity.category,
         timestamp: new Date()
       });
       
@@ -209,18 +253,8 @@ class GoalComponent extends Component {
       let values = [goalId];
       let valueIndex = 2;
       
-      if (goalData.name !== undefined) {
-        updateFields.push(`name = $${valueIndex++}`);
-        values.push(goalData.name);
-      }
-      
-      if (goalData.description !== undefined) {
-        updateFields.push(`description = $${valueIndex++}`);
-        values.push(goalData.description);
-      }
-      
       if (goalData.targetCount !== undefined) {
-        updateFields.push(`target_count = $${valueIndex++}`);
+        updateFields.push(`target_value = $${valueIndex++}`);
         values.push(goalData.targetCount);
       }
       
@@ -263,10 +297,23 @@ class GoalComponent extends Component {
       
       const updatedGoal = result.rows[0];
       
-      // Publish goal updated event
+      // Get activity info for the event
+      const activity = await this.activityComponent.getActivityById(goal.activity_type_id);
+      
+      // Add activity data for the client
+      if (activity) {
+        updatedGoal.activity_name = activity.name;
+        updatedGoal.unit = activity.unit;
+      }
+      
+      // Publish goal updated event with activity data
       this.publish('goal:updated', {
         goalId,
         userId: goal.user_id,
+        activityId: goal.activity_type_id,
+        activityName: activity ? activity.name : 'Unknown',
+        activityUnit: activity ? activity.unit : '',
+        activityCategory: activity ? activity.category : 'other',
         timestamp: new Date()
       });
       
@@ -350,7 +397,7 @@ class GoalComponent extends Component {
       ]);
       
       const currentCount = parseFloat(result.rows[0].total);
-      const targetCount = goal.target_count;
+      const targetCount = goal.target_value;
       const progressPercent = Math.round((currentCount / targetCount) * 100);
       const completed = progressPercent >= 100;
       const remaining = Math.max(0, targetCount - currentCount);

@@ -194,7 +194,7 @@ class AnalyticsComponent extends Component {
           COUNT(DISTINCT DATE(al.logged_at)) as active_days,
           MIN(al.logged_at) as first_log,
           MAX(al.logged_at) as last_log
-        FROM activity_types at
+        FROM activity_typesat
         LEFT JOIN activity_logs al ON at.activity_type_id = al.activity_type_id 
           AND al.user_id = $1
           AND al.logged_at >= $2
@@ -208,8 +208,8 @@ class AnalyticsComponent extends Component {
       
       // Calculate overall stats
       const activityStats = totalResult.rows;
-      const totalActivities = activityStats.length;
-      const activeActivities = activityStats.filter(a => a.total_count > 0).length;
+      const totalactivity_types= activityStats.length;
+      const activeactivity_types= activityStats.filter(a => a.total_count > 0).length;
       
       // Calculate active days percentage
       const daysDiff = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
@@ -231,9 +231,9 @@ class AnalyticsComponent extends Component {
           activeDays: activeDays.length,
           activeDaysPercent
         },
-        activities: {
-          total: totalActivities,
-          active: activeActivities,
+        activity_types: {
+          total: totalactivity_types,
+          active: activeactivity_types,
           mostConsistent: mostConsistent?.total_count > 0 ? {
             name: mostConsistent.name,
             activeDays: mostConsistent.active_days,
@@ -293,7 +293,7 @@ class AnalyticsComponent extends Component {
       }
       
       // Get activity types
-      const activityTypes = await this.activityComponent.getAllActivities(userId);
+      const activityTypes = await this.activityComponent.getAllActivityTypes(userId);
       
       // Get activity breakdown
       const query = `
@@ -330,14 +330,14 @@ class AnalyticsComponent extends Component {
         if (!breakdownByPeriod[period]) {
           breakdownByPeriod[period] = {
             period,
-            activities: {}
+            activity_types: {}
           };
         }
         
         const activityId = row.activity_type_id;
         const activity = activityMap[activityId] || { name: `Activity ${activityId}`, unit: 'units' };
         
-        breakdownByPeriod[period].activities[activity.name] = {
+        breakdownByPeriod[period].activity_types[activity.name] = {
           total: parseFloat(row.total),
           unit: activity.unit
         };
@@ -353,7 +353,7 @@ class AnalyticsComponent extends Component {
         groupBy,
         startDate,
         endDate,
-        activities: activityTypes.map(a => ({ id: a.activity_type_id, name: a.name, unit: a.unit })),
+        activity_types: activityTypes.map(a => ({ id: a.activity_type_id, name: a.name, unit: a.unit })),
         breakdown
       };
     } catch (error) {
@@ -365,7 +365,7 @@ class AnalyticsComponent extends Component {
   /**
    * Get activity trends for a single activity
    * @param {number} userId - User ID
-   * @param {number} activityId - Activity ID (optional, if null then all activities)
+   * @param {number} activityId - Activity ID (optional, if null then all activity_types)
    * @param {string} period - Period type (weekly, monthly)
    * @param {number} limit - Number of periods to include
    * @returns {Promise<Object>} Activity trends
@@ -408,8 +408,7 @@ class AnalyticsComponent extends Component {
         
         params = [userId, activityId, limit];
       } else {
-        // All activities
-        query = `
+        // All activity_typesquery = `
           SELECT 
             ${dateGroup} as period,
             activity_type_id,
@@ -536,8 +535,8 @@ class AnalyticsComponent extends Component {
         insights,
         summary: {
           activeDays: summary.period.activeDaysPercent,
-          activeActivities: summary.activities.active,
-          totalActivities: summary.activities.total,
+          activeactivity_types: summary.activity_types.active,
+          totalactivity_types: summary.activity_types.total,
           completedGoals: goalSummary.summary.completedGoals,
           activeGoals: goalSummary.summary.activeGoals
         }
@@ -582,7 +581,7 @@ class AnalyticsComponent extends Component {
           total: 0,
           newLast7Days: 0
         },
-        activities: {
+        activity_types: {
           totalTypes: 0,
           totalLogs: 0
         },
@@ -621,16 +620,15 @@ class AnalyticsComponent extends Component {
   }
 
   /**
-   * Get most popular activities (admin only)
-   * @param {number} limit - Number of activities to return
-   * @returns {Promise<Array>} Popular activities
-   */
-  async getMostPopularActivities(limit = 10) {
+   * Get most popular activity_types(admin only)
+   * @param {number} limit - Number of activity_typesto return
+   * @returns {Promise<Array>} Popular activity_types*/
+  async getMostPopularactivity_types(limit = 10) {
     try {
-      // Implementation would fetch and rank activities by popularity
+      // Implementation would fetch and rank activity_typesby popularity
       return [];
     } catch (error) {
-      console.error('[Analytics] Error getting popular activities:', error);
+      console.error('[Analytics] Error getting popular activity_types:', error);
       throw error;
     }
   }

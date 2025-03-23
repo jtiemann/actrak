@@ -63,14 +63,15 @@ function goalRoutes(goalComponent) {
    */
   router.post('/', authenticateJWT, async (req, res, next) => {
     try {
+      // Log the incoming request for debugging
+      console.log('Creating goal with request body:', req.body);
+      
       const { 
         activityId, 
         targetCount, 
         periodType, 
         startDate, 
-        endDate, 
-        name, 
-        description 
+        endDate
       } = req.body;
       
       // Validate input
@@ -85,17 +86,16 @@ function goalRoutes(goalComponent) {
         req.user.id,
         activityId,
         {
-          targetCount,
+          targetCount, // This will be mapped to target_value in the component
           periodType,
           startDate: startDate ? new Date(startDate) : new Date(),
-          endDate: endDate ? new Date(endDate) : null,
-          name,
-          description
+          endDate: endDate ? new Date(endDate) : null
         }
       );
       
       res.status(201).json(goal);
     } catch (err) {
+      console.error('Error creating goal:', err);
       next(err);
     }
   });
@@ -111,9 +111,7 @@ function goalRoutes(goalComponent) {
         targetCount, 
         periodType, 
         startDate, 
-        endDate, 
-        name, 
-        description,
+        endDate,
         isActive
       } = req.body;
       
@@ -133,12 +131,10 @@ function goalRoutes(goalComponent) {
       const goal = await goalComponent.updateGoal(
         goalId,
         {
-          targetCount,
+          targetCount, // This will be mapped to target_value in the component
           periodType,
           startDate: startDate ? new Date(startDate) : undefined,
           endDate: endDate ? new Date(endDate) : undefined,
-          name,
-          description,
           isActive
         }
       );

@@ -10,22 +10,22 @@ function activityRoutes(activityComponent) {
   const router = express.Router();
   
   /**
-   * Get all activities for a user
-   * GET /api/activities/:userId
+   * Get all activity types for a user
+   * GET /api/activity_types/:userId
    */
   router.get('/:userId', authenticateJWT, async (req, res, next) => {
     try {
       const userId = parseInt(req.params.userId);
       
-      // Check if user has permission to access activities
+      // Check if user has permission to access activity types
       if (userId !== req.user.id) {
-        return res.status(403).json({ error: 'You do not have permission to access these activities' });
+        return res.status(403).json({ error: 'You do not have permission to access these activity types' });
       }
       
-      // Get activities from component
-      const activities = await activityComponent.getAllActivities(userId);
+      // Get activity types from component
+      const activityTypes = await activityComponent.getAllActivityTypes(userId);
       
-      res.json(activities);
+      res.json(activityTypes);
     } catch (err) {
       next(err);
     }
@@ -33,14 +33,14 @@ function activityRoutes(activityComponent) {
   
   /**
    * Get activity by ID
-   * GET /api/activities/:userId/:activityId
+   * GET /api/activity_types/:userId/:activityId
    */
   router.get('/:userId/:activityId', authenticateJWT, async (req, res, next) => {
     try {
       const userId = parseInt(req.params.userId);
       const activityId = parseInt(req.params.activityId);
       
-      // Check if user has permission to access activities
+      // Check if user has permission to access activity types
       if (userId !== req.user.id) {
         return res.status(403).json({ error: 'You do not have permission to access this activity' });
       }
@@ -65,7 +65,7 @@ function activityRoutes(activityComponent) {
   
   /**
    * Create a new activity
-   * POST /api/activities
+   * POST /api/activity_types
    */
   router.post('/', authenticateJWT, async (req, res, next) => {
     try {
@@ -76,7 +76,7 @@ function activityRoutes(activityComponent) {
       
       // Check if user has permission to create activity
       if (userId !== req.user.id) {
-        return res.status(403).json({ error: 'You do not have permission to create activities for this user' });
+        return res.status(403).json({ error: 'You do not have permission to create activity types for this user' });
       }
       
       // Validate input
@@ -102,7 +102,7 @@ function activityRoutes(activityComponent) {
   
   /**
    * Update an activity
-   * PUT /api/activities/:activityId
+   * PUT /api/activity_types/:activityId
    */
   router.put('/:activityId', authenticateJWT, async (req, res, next) => {
     try {
@@ -138,7 +138,7 @@ function activityRoutes(activityComponent) {
   
   /**
    * Delete an activity
-   * DELETE /api/activities/:activityId
+   * DELETE /api/activity_types/:activityId
    */
   router.delete('/:activityId', authenticateJWT, async (req, res, next) => {
     try {
@@ -167,7 +167,7 @@ function activityRoutes(activityComponent) {
   
   /**
    * Get activity logs
-   * GET /api/activities/:activityId/logs
+   * GET /api/activity_types/:activityId/logs
    */
   router.get('/:activityId/logs', authenticateJWT, async (req, res, next) => {
     try {
@@ -204,7 +204,7 @@ function activityRoutes(activityComponent) {
   
   /**
    * Create activity log
-   * POST /api/activities/:activityId/logs
+   * POST /api/activity_types/:activityId/logs
    */
   router.post('/:activityId/logs', authenticateJWT, async (req, res, next) => {
     try {

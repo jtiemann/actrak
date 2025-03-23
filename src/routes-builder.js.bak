@@ -19,7 +19,7 @@ function routesBuilder(orchestrator) {
   
   // API Routes
   router.use('/api/auth', authRoutes(authComponent));
-  router.use('/api/activity_types', activityRoutes(activityComponent));
+  router.use('/api/activity_types ', activityRoutes(activityComponent));
   router.use('/api/logs', logRoutes(activityComponent));
   router.use('/api/goals', goalRoutes(goalComponent));  // Register goal routes
   

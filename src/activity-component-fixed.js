@@ -1,5 +1,4 @@
-const Component = require('../../core/component-class');
-const { safelyDeleteActivity, safelyUpdateActivity } = require('./safe-delete');
+const Component = require('./core/component-class');
 
 /**
  * Activity Component
@@ -13,7 +12,7 @@ class ActivityComponent extends Component {
   constructor(options = {}) {
     super('Activity', options);
     
-    // Cache for frequently accessed activities
+    // Cache for frequently accessed activity types 
     this.activityCache = new Map();
     
     // Cache timeout in milliseconds
@@ -56,7 +55,7 @@ class ActivityComponent extends Component {
    * @param {Object} data - Activity data
    */
   _handleActivityCreated(data) {
-    // Clear user activities cache
+    // Clear user activity types cache
     this._clearUserCache(data.userId);
   }
 
@@ -68,7 +67,7 @@ class ActivityComponent extends Component {
     // Clear specific activity cache
     this._clearActivityCache(data.activityId);
     
-    // Clear user activities cache
+    // Clear user activity types cache
     this._clearUserCache(data.userId);
   }
 
@@ -80,7 +79,7 @@ class ActivityComponent extends Component {
     // Clear specific activity cache
     this._clearActivityCache(data.activityId);
     
-    // Clear user activities cache
+    // Clear user activity types cache
     this._clearUserCache(data.userId);
   }
 
@@ -94,7 +93,7 @@ class ActivityComponent extends Component {
   }
 
   /**
-   * Get all activities for a user
+   * Get all activity types for a user
    * @param {number} userId - User ID
    * @returns {Promise<Array>} Array of activity objects
    */
@@ -108,7 +107,7 @@ class ActivityComponent extends Component {
         return cached.data;
       }
       
-      // Get from database - Fixed table name from activity_typesto activities
+      // Get from database
       const query = 'SELECT * FROM activity_typesWHERE user_id = $1 ORDER BY name';
       const result = await this.db.query(query, [userId]);
       
@@ -120,7 +119,7 @@ class ActivityComponent extends Component {
       
       return result.rows;
     } catch (error) {
-      console.error('[Activity] Error getting activities:', error);
+      console.error('[Activity] Error getting activity types:', error);
       throw error;
     }
   }
@@ -140,7 +139,7 @@ class ActivityComponent extends Component {
         return cached.data;
       }
       
-      // Get from database - Fixed table name from activity_typesto activities
+      // Get from database
       const query = 'SELECT * FROM activity_typesWHERE activity_type_id = $1';
       const result = await this.db.query(query, [activityId]);
       
@@ -167,18 +166,14 @@ class ActivityComponent extends Component {
    * @param {string} name - Activity name
    * @param {string} unit - Activity unit
    * @param {boolean} isPublic - Whether the activity is public
-   * @param {string} category - Activity category (optional)
    * @returns {Promise<Object>} Created activity object
    */
-  async createActivity(userId, name, unit, isPublic = false, category = 'other') {
+  async createActivity(userId, name, unit, isPublic = false) {
     try {
-      console.log('[Activity] Creating activity:', { userId, name, unit, isPublic, category });
-      
-      // Create activity in database - Fixed table name from activity_typesto activities
-      // Include category in the insert
+      // Create activity in database
       const query = `
-        INSERT INTO activity_types(user_id, name, unit, is_public, category) 
-        VALUES ($1, $2, $3, $4, $5) 
+        INSERT INTO activity_types(user_id, name, unit, is_public) 
+        VALUES ($1, $2, $3, $4) 
         RETURNING *
       `;
       
@@ -186,8 +181,7 @@ class ActivityComponent extends Component {
         userId,
         name,
         unit,
-        isPublic,
-        category
+        isPublic
       ]);
       
       const activity = result.rows[0];
@@ -213,10 +207,9 @@ class ActivityComponent extends Component {
    * @param {string} name - Activity name
    * @param {string} unit - Activity unit
    * @param {boolean} isPublic - Whether the activity is public
-   * @param {string} category - Activity category (optional)
    * @returns {Promise<Object>} Updated activity object
    */
-  async updateActivity(activityId, name, unit, isPublic, category) {
+  async updateActivity(activityId, name, unit, isPublic) {
     try {
       // Get current activity to check ownership
       const activity = await this.getActivityById(activityId);
@@ -225,13 +218,21 @@ class ActivityComponent extends Component {
         throw new Error('Activity not found');
       }
       
-      // Use safe update function to handle foreign key constraints
-      const updatedActivity = await safelyUpdateActivity(this.db, activityId, activity.user_id, {
+      // Update activity in database
+      const query = `
+        UPDATE activity_typesSET name = $2, unit = $3, is_public = $4, updated_at = NOW() 
+        WHERE activity_type_id = $1 
+        RETURNING *
+      `;
+      
+      const result = await this.db.query(query, [
+        activityId,
         name,
         unit,
-        isPublic,
-        category: category || activity.category || 'other'
-      });
+        isPublic
+      ]);
+      
+      const updatedActivity = result.rows[0];
       
       // Publish activity updated event
       this.publish('activity:updated', {
@@ -264,8 +265,13 @@ class ActivityComponent extends Component {
       
       const userId = activity.user_id;
       
-      // Use safe delete function to handle foreign key constraints
-      const success = await safelyDeleteActivity(this.db, activityId, userId);
+      // Delete activity from database
+      const query = 'DELETE FROM activity_typesWHERE activity_type_id = $1';
+      const result = await this.db.query(query, [activityId]);
+      
+      if (result.rowCount === 0) {
+        return false;
+      }
       
       // Publish activity deleted event
       this.publish('activity:deleted', {
@@ -274,7 +280,7 @@ class ActivityComponent extends Component {
         timestamp: new Date()
       });
       
-      return success;
+      return true;
     } catch (error) {
       console.error('[Activity] Error deleting activity:', error);
       throw error;
@@ -303,7 +309,7 @@ class ActivityComponent extends Component {
       let query = 'SELECT * FROM activity_logs WHERE user_id = $1';
       const params = [userId];
       
-      // Add activity filter if provided - Fixed column name
+      // Add activity filter if provided
       if (activityId) {
         query += ' AND activity_type_id = $' + (params.length + 1);
         params.push(activityId);
@@ -356,7 +362,7 @@ class ActivityComponent extends Component {
         throw new Error('Activity does not belong to user');
       }
       
-      // Create log in database - Fixed column name
+      // Create log in database
       const query = `
         INSERT INTO activity_logs (user_id, activity_type_id, count, notes, logged_at) 
         VALUES ($1, $2, $3, $4, $5) 
@@ -487,7 +493,7 @@ class ActivityComponent extends Component {
    * @param {string} period - Period type (daily, weekly, monthly, yearly)
    * @param {Date} startDate - Start date
    * @param {Date} endDate - End date
-   * @returns {Promise<Array>} Array of statistic objects
+   * @returns {Promise<Object>} Activity statistics
    */
   async getActivityStats(userId, activityId, period = 'daily', startDate = null, endDate = null) {
     try {
@@ -501,57 +507,269 @@ class ActivityComponent extends Component {
         endDate = new Date();
       }
       
-      // Build SQL date grouping
-      let dateGroup;
+      // Get logs for this activity
+      const logs = await this.getActivityLogs(userId, activityId);
+      
+      // Calculate today's total
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const todayLogs = logs.filter(log => {
+        const logDate = new Date(log.logged_at);
+        return logDate >= today;
+      });
+      
+      const todayTotal = todayLogs.reduce((sum, log) => sum + parseFloat(log.count || 0), 0);
+      
+      // Calculate this week's total
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Start of week (Sunday)
+      weekStart.setHours(0, 0, 0, 0);
+      
+      const weekLogs = logs.filter(log => {
+        const logDate = new Date(log.logged_at);
+        return logDate >= weekStart;
+      });
+      
+      const weekTotal = weekLogs.reduce((sum, log) => sum + parseFloat(log.count || 0), 0);
+      
+      // Calculate this month's total
+      const monthStart = new Date();
+      monthStart.setDate(1); // Start of month
+      monthStart.setHours(0, 0, 0, 0);
+      
+      const monthLogs = logs.filter(log => {
+        const logDate = new Date(log.logged_at);
+        return logDate >= monthStart;
+      });
+      
+      const monthTotal = monthLogs.reduce((sum, log) => sum + parseFloat(log.count || 0), 0);
+      
+      // Calculate this year's total
+      const yearStart = new Date();
+      yearStart.setMonth(0, 1); // Start of year (January 1)
+      yearStart.setHours(0, 0, 0, 0);
+      
+      const yearLogs = logs.filter(log => {
+        const logDate = new Date(log.logged_at);
+        return logDate >= yearStart;
+      });
+      
+      const yearTotal = yearLogs.reduce((sum, log) => sum + parseFloat(log.count || 0), 0);
+      
+      // Additional stats based on the requested period
+      let periodStats = [];
       
       switch (period) {
         case 'daily':
-          dateGroup = 'DATE(logged_at)';
+          // Daily stats for the last 30 days
+          periodStats = await this._getDailyStats(logs, startDate, endDate);
           break;
         case 'weekly':
-          dateGroup = 'DATE_TRUNC(\'week\', logged_at)';
+          // Weekly stats
+          periodStats = await this._getWeeklyStats(logs, startDate, endDate);
           break;
         case 'monthly':
-          dateGroup = 'DATE_TRUNC(\'month\', logged_at)';
+          // Monthly stats
+          periodStats = await this._getMonthlyStats(logs, startDate, endDate);
           break;
         case 'yearly':
-          dateGroup = 'DATE_TRUNC(\'year\', logged_at)';
+          // Yearly stats
+          periodStats = await this._getYearlyStats(logs, startDate, endDate);
           break;
-        default:
-          dateGroup = 'DATE(logged_at)';
       }
       
-      // Query for activity stats - Fixed column name
-      const query = `
-        SELECT 
-          ${dateGroup} AS period,
-          SUM(count) AS total,
-          AVG(count) AS average,
-          MIN(count) AS minimum,
-          MAX(count) AS maximum,
-          COUNT(*) AS entries
-        FROM activity_logs
-        WHERE 
-          user_id = $1 
-          AND activity_type_id = $2
-          AND logged_at >= $3
-          AND logged_at <= $4
-        GROUP BY ${dateGroup}
-        ORDER BY period ASC
-      `;
-      
-      const result = await this.db.query(query, [
-        userId,
-        activityId,
-        startDate,
-        endDate
-      ]);
-      
-      return result.rows;
+      return {
+        today: todayTotal,
+        week: weekTotal,
+        month: monthTotal,
+        year: yearTotal,
+        period,
+        detailedStats: periodStats
+      };
     } catch (error) {
       console.error('[Activity] Error getting activity stats:', error);
-      throw error;
+      // Return basic stats if there's an error
+      return {
+        today: 0,
+        week: 0,
+        month: 0,
+        year: 0,
+        period,
+        detailedStats: []
+      };
     }
+  }
+
+  /**
+   * Get daily stats for an activity
+   * @param {Array} logs - Activity logs
+   * @param {Date} startDate - Start date
+   * @param {Date} endDate - End date
+   * @returns {Promise<Array>} Daily stats
+   * @private
+   */
+  async _getDailyStats(logs, startDate, endDate) {
+    // Group logs by day
+    const dailyStats = {};
+    
+    // Initialize all days in the range
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      const dateKey = currentDate.toISOString().split('T')[0];
+      dailyStats[dateKey] = {
+        date: dateKey,
+        total: 0,
+        count: 0
+      };
+      
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    // Group logs by day
+    logs.forEach(log => {
+      const logDate = new Date(log.logged_at);
+      
+      // Skip logs outside the date range
+      if (logDate < startDate || logDate > endDate) {
+        return;
+      }
+      
+      const dateKey = logDate.toISOString().split('T')[0];
+      
+      if (!dailyStats[dateKey]) {
+        dailyStats[dateKey] = {
+          date: dateKey,
+          total: 0,
+          count: 0
+        };
+      }
+      
+      dailyStats[dateKey].total += parseFloat(log.count || 0);
+      dailyStats[dateKey].count++;
+    });
+    
+    // Convert to array and sort by date
+    return Object.values(dailyStats).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  /**
+   * Get weekly stats for an activity
+   * @param {Array} logs - Activity logs
+   * @param {Date} startDate - Start date
+   * @param {Date} endDate - End date
+   * @returns {Promise<Array>} Weekly stats
+   * @private
+   */
+  async _getWeeklyStats(logs, startDate, endDate) {
+    // Similar implementation to _getDailyStats but grouped by week
+    // This is a simplified implementation just to get it working
+    const weeklyStats = {};
+    
+    logs.forEach(log => {
+      const logDate = new Date(log.logged_at);
+      
+      // Skip logs outside the date range
+      if (logDate < startDate || logDate > endDate) {
+        return;
+      }
+      
+      // Get week number (1-53)
+      const weekStart = new Date(logDate);
+      weekStart.setDate(logDate.getDate() - logDate.getDay());
+      const weekKey = `${weekStart.getFullYear()}-W${Math.ceil((weekStart.getDate() + weekStart.getDay()) / 7)}`;
+      
+      if (!weeklyStats[weekKey]) {
+        weeklyStats[weekKey] = {
+          week: weekKey,
+          total: 0,
+          count: 0
+        };
+      }
+      
+      weeklyStats[weekKey].total += parseFloat(log.count || 0);
+      weeklyStats[weekKey].count++;
+    });
+    
+    // Convert to array and sort by week
+    return Object.values(weeklyStats).sort((a, b) => a.week.localeCompare(b.week));
+  }
+
+  /**
+   * Get monthly stats for an activity
+   * @param {Array} logs - Activity logs
+   * @param {Date} startDate - Start date
+   * @param {Date} endDate - End date
+   * @returns {Promise<Array>} Monthly stats
+   * @private
+   */
+  async _getMonthlyStats(logs, startDate, endDate) {
+    // Similar implementation to _getDailyStats but grouped by month
+    const monthlyStats = {};
+    
+    logs.forEach(log => {
+      const logDate = new Date(log.logged_at);
+      
+      // Skip logs outside the date range
+      if (logDate < startDate || logDate > endDate) {
+        return;
+      }
+      
+      const monthKey = `${logDate.getFullYear()}-${String(logDate.getMonth() + 1).padStart(2, '0')}`;
+      
+      if (!monthlyStats[monthKey]) {
+        monthlyStats[monthKey] = {
+          month: monthKey,
+          total: 0,
+          count: 0
+        };
+      }
+      
+      monthlyStats[monthKey].total += parseFloat(log.count || 0);
+      monthlyStats[monthKey].count++;
+    });
+    
+    // Convert to array and sort by month
+    return Object.values(monthlyStats).sort((a, b) => a.month.localeCompare(b.month));
+  }
+
+  /**
+   * Get yearly stats for an activity
+   * @param {Array} logs - Activity logs
+   * @param {Date} startDate - Start date
+   * @param {Date} endDate - End date
+   * @returns {Promise<Array>} Yearly stats
+   * @private
+   */
+  async _getYearlyStats(logs, startDate, endDate) {
+    // Similar implementation to _getDailyStats but grouped by year
+    const yearlyStats = {};
+    
+    logs.forEach(log => {
+      const logDate = new Date(log.logged_at);
+      
+      // Skip logs outside the date range
+      if (logDate < startDate || logDate > endDate) {
+        return;
+      }
+      
+      const yearKey = logDate.getFullYear().toString();
+      
+      if (!yearlyStats[yearKey]) {
+        yearlyStats[yearKey] = {
+          year: yearKey,
+          total: 0,
+          count: 0
+        };
+      }
+      
+      yearlyStats[yearKey].total += parseFloat(log.count || 0);
+      yearlyStats[yearKey].count++;
+    });
+    
+    // Convert to array and sort by year
+    return Object.values(yearlyStats).sort((a, b) => a.year.localeCompare(b.year));
   }
 
   /**

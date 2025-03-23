@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // User data
     let currentUser = null;
-    let activityTypes = [];
+    let activity_types  = [];
     let currentActivity = null;
     
     // Check if user is already logged in (from authManager)
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', function() {
             ...window.authManager.getUser()
         };
         showApp();
-        loadActivityTypes();
+        loadactivity_types ();
     } 
     // Check localStorage as fallback
     else {
@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 currentUser = JSON.parse(storedUser);
                 showApp();
-                loadActivityTypes();
+                loadactivity_types ();
             } catch (error) {
                 console.error('Error parsing stored user data:', error);
                 localStorage.removeItem('currentUser');
@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     activityTypeSelect.addEventListener('change', function() {
         const selectedId = parseInt(this.value);
-        currentActivity = activityTypes.find(a => a.activity_type_id === selectedId);
+        currentActivity = activity_types .find(a => a.activity_type_id === selectedId);
         if (currentActivity) {
             updateUIForActivity(currentActivity);
             // Load previous entry as default
@@ -158,7 +158,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             showApp();
-            loadActivityTypes();
+            loadactivity_types ();
         } catch (error) {
             console.error('Login error:', error);
             loginError.textContent = 'An error occurred. Please try again.';
@@ -198,36 +198,31 @@ document.addEventListener('DOMContentLoaded', function() {
         loginBtn.disabled = false;
     }
     
-    // Load activity types for current user
-    async function loadActivityTypes() {
+    // Load activity_types  for current user
+    async function loadactivity_types () {
         try {
             let activityData;
             
             if (window.apiClient) {
-                console.log('Using API client to load activity types');
-                activityData = await window.apiClient.getActivityTypes();
-                console.log('API response:', activityData);
+                activityData = await window.apiClient.getactivity_types ();
             } else {
-                console.log('Using direct fetch to load activity types');
-                const response = await fetch(`/api/activity_types/${currentUser.id || currentUser.user_id}`, {
+                const response = await fetch(`/api/activity_types /${currentUser.id || currentUser.user_id}`, {
                     headers: {
                         'Authorization': `Bearer ${currentUser.token}`
                     }
                 });
                 
-                if (!response.ok) throw new Error('Failed to load activity types');
+                if (!response.ok) throw new Error('Failed to load activity_types ');
                 activityData = await response.json();
-                console.log('Fetch response:', activityData);
             }
             
-            activityTypes = Array.isArray(activityData) ? activityData : [];
-            console.log('Activity types loaded:', activityTypes);
+            activity_types  = Array.isArray(activityData) ? activityData : [];
             
             // Populate activity dropdown
             populateActivityDropdown();
             
-            if (activityTypes.length > 0) {
-                currentActivity = activityTypes[0];
+            if (activity_types .length > 0) {
+                currentActivity = activity_types [0];
                 updateUIForActivity(currentActivity);
                 loadLogs();
                 loadStats();
@@ -239,7 +234,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         } catch (error) {
-            console.error('Error loading activity types:', error);
+            console.error('Error loading activity_types :', error);
         }
     }
     
@@ -249,7 +244,7 @@ document.addEventListener('DOMContentLoaded', function() {
         activityTypeSelect.innerHTML = '';
         
         // Add options
-        activityTypes.forEach(activity => {
+        activity_types .forEach(activity => {
             const option = document.createElement('option');
             option.value = activity.activity_type_id;
             option.textContent = activity.name;
@@ -286,7 +281,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 newActivity = await window.apiClient.createActivity(name, unit, 'other');
             } else {
                 // Direct API request - add isPublic parameter
-                const response = await fetch('/api/activity_types', {
+                const response = await fetch('/api/activity_types ', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -312,7 +307,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             console.log('New activity created:', newActivity);
             
-            activityTypes.push(newActivity);
+            activity_types .push(newActivity);
             
             // Update dropdown and select new activity
             populateActivityDropdown();

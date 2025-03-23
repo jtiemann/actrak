@@ -14,7 +14,7 @@ const Orchestrator = require('./src/core/Orchestrator');
 // Application components
 const Database = require('./src/components/Database');
 const AuthComponent = require('./src/components/auth/AuthComponent');
-const ActivityComponent = require('./src/components/activities/ActivityComponent');
+const ActivityComponent = require('./src/components/activity_types /ActivityComponent');
 const GoalComponent = require('./src/components/goals/GoalComponent');
 const AchievementComponent = require('./src/components/achievements/AchievementComponent');
 const NotificationComponent = require('./src/components/notifications/NotificationComponent');

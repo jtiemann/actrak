@@ -172,63 +172,40 @@ class ApiClient {
   async _handleResponse(response) {
     // Check if response needs to be processed as JSON
     const contentType = response.headers.get('content-type');
-    
-    // Enhanced error handling for server errors
-    if (!response.ok) {
-      let errorMessage = `HTTP error: ${response.status} ${response.statusText}`;
-      let errorDetail = null;
-      
-      try {
-        if (contentType && contentType.includes('application/json')) {
-          const errorData = await response.json();
-          errorDetail = errorData;
-          errorMessage = errorData.error || errorData.message || errorMessage;
-        } else {
-          errorDetail = await response.text();
-        }
-      } catch (parseError) {
-        console.warn('Error parsing error response:', parseError);
-      }
-      
-      // If unauthorized, try to refresh token
-      if (response.status === 401) {
-        // Handle unauthorized error
-        if (window.authManager) {
-          window.authManager.clearAuth();
-        } else {
-          localStorage.removeItem('currentUser');
-        }
-        
-        // Reload page to force login
-        window.location.reload();
-        throw new Error('Session expired. Please log in again.');
-      }
-      
-      const error = new Error(errorMessage);
-      error.status = response.status;
-      error.statusText = response.statusText;
-      error.detail = errorDetail;
-      throw error;
-    }
-    
-    // Process successful response
     if (contentType && contentType.includes('application/json')) {
-      try {
-        const data = await response.json();
-        
-        // Check for refresh token header
-        const refreshToken = response.headers.get('X-Refresh-Token');
-        if (refreshToken) {
-          this._updateToken(refreshToken);
+      const data = await response.json();
+      
+      // Check for refresh token header
+      const refreshToken = response.headers.get('X-Refresh-Token');
+      if (refreshToken) {
+        this._updateToken(refreshToken);
+      }
+      
+      if (!response.ok) {
+        // If unauthorized, try to refresh token
+        if (response.status === 401) {
+          // Handle unauthorized error
+          if (window.authManager) {
+            window.authManager.clearAuth();
+          } else {
+            localStorage.removeItem('currentUser');
+          }
+          
+          // Reload page to force login
+          window.location.reload();
+          throw new Error('Session expired. Please log in again.');
         }
         
-        return data;
-      } catch (parseError) {
-        console.error('Error parsing JSON response:', parseError);
-        throw new Error('Invalid JSON response from server');
+        throw new Error(data.error || 'API request failed');
       }
+      
+      return data;
     } else {
       // For non-JSON responses
+      if (!response.ok) {
+        throw new Error(`API request failed with status: ${response.status}`);
+      }
+      
       return await response.text();
     }
   }
@@ -348,7 +325,7 @@ class ApiClient {
         // Retry on network errors and 5xx server errors
         if (retryCount < this.maxRetries && 
             (error.name === 'TypeError' || // Network error
-             (error.status && error.status >= 500))) { // 5xx status
+             error.message.includes('failed with status: 5'))) { // 5xx status
           
           // Wait before retrying
           await new Promise(resolve => setTimeout(resolve, this.retryDelay * (retryCount + 1)));
@@ -498,16 +475,16 @@ class ApiClient {
    */
   
   /**
-   * Get all activity types for current user
+   * Get all activity_types  for current user
    * @returns {Promise<Array>} Activity list
    */
-  async getActivityTypes() {
+  async getactivity_types () {
     const user = this._getUser();
     if (!user) {
       throw new Error('User not authenticated');
     }
     
-    return this.request(`/activity_types/${user.id}`);
+    return this.request(`/activity_types /${user.id}`);
   }
   
   /**
@@ -516,7 +493,7 @@ class ApiClient {
    * @returns {Promise<Object>} Activity data
    */
   async getActivity(activityId) {
-    return this.request(`/activity_types/details/${activityId}`);
+    return this.request(`/activity_types /details/${activityId}`);
   }
   
   /**
@@ -540,15 +517,15 @@ class ApiClient {
       isPublic: false
     });
     
-    const result = await this.request('/activity_types', 'POST', {
+    const result = await this.request('/activity_types ', 'POST', {
       userId: user.id,
       name,
       unit,
       isPublic: false
     });
     
-    // Clear activity_types cache
-    this.clearCache(`/activity_types/${user.id}`);
+    // Clear activity_types  cache
+    this.clearCache(`/activity_types /${user.id}`);
     
     return result;
   }
@@ -564,15 +541,15 @@ class ApiClient {
   async updateActivity(activityId, name, unit, isPublic = false) {
     const user = this._getUser();
     
-    const result = await this.request(`/activity_types/${activityId}`, 'PUT', {
+    const result = await this.request(`/activity_types /${activityId}`, 'PUT', {
       name,
       unit,
       isPublic
     });
     
-    // Clear activity_types cache
+    // Clear activity_types  cache
     if (user) {
-      this.clearCache(`/activity_types/${user.id}`);
+      this.clearCache(`/activity_types /${user.id}`);
     }
     
     return result;
@@ -586,11 +563,11 @@ class ApiClient {
   async deleteActivity(activityId) {
     const user = this._getUser();
     
-    const result = await this.request(`/activity_types/${activityId}`, 'DELETE');
+    const result = await this.request(`/activity_types /${activityId}`, 'DELETE');
     
-    // Clear activity_types cache
+    // Clear activity_types  cache
     if (user) {
-      this.clearCache(`/activity_types/${user.id}`);
+      this.clearCache(`/activity_types /${user.id}`);
     }
     
     return result;
@@ -606,7 +583,7 @@ class ApiClient {
       throw new Error('User not authenticated');
     }
     
-    return this.request(`/activity_types/categories/${user.id}`);
+    return this.request(`/activity_types /categories/${user.id}`);
   }
   
   /**
@@ -750,22 +727,32 @@ class ApiClient {
   
   /**
    * Create a new goal
-   * @param {number} activityTypeId - Activity Type ID
+   * @param {number} activityId - Activity ID (Fixed parameter name)
    * @param {number} targetCount - Target count
    * @param {string} periodType - Period type
    * @param {string} startDate - Start date
    * @param {string} endDate - End date
    * @returns {Promise<Object>} Created goal
    */
-  async createGoal(activityTypeId, targetCount, periodType, startDate, endDate) {
+  async createGoal(activityId, targetCount, periodType, startDate, endDate) {
     const user = this._getUser();
     if (!user) {
       throw new Error('User not authenticated');
     }
     
+    console.log('Creating goal with params:', {
+      userId: user.id,
+      activityId,  // Changed from activityTypeId to activityId
+      targetCount,
+      periodType,
+      startDate,
+      endDate
+    });
+    
+    // Use the correct parameter name expected by the server (activityId)
     const result = await this.request('/goals', 'POST', {
       userId: user.id,
-      activityTypeId,
+      activityId,  // Changed from activityTypeId to activityId
       targetCount,
       periodType,
       startDate,

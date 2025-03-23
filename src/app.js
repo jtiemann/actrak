@@ -15,6 +15,7 @@ const Orchestrator = require('./core/orchestrator');
 const Database = require('./database-component');
 const AuthComponent = require('./auth-component');
 const ActivityComponent = require('./activity-component');
+const GoalComponent = require('./components/goals/GoalComponent'); // Import Goal component
 
 // Middleware and routes
 const { errorLogger, errorHandler } = require('./shared/middlewares/errorHandler');
@@ -46,6 +47,7 @@ class Application {
       'Database',
       'Auth',
       'Activity',
+      'Goal',     // Add Goal to init order
       'Express'
     ];
   }
@@ -107,12 +109,20 @@ class Application {
       
       this.orchestrator.register('Activity', activityComponent, ['Database']);
       
+      // Register goal component with dependencies
+      const goalComponent = new GoalComponent({
+        debug: this.debug
+      });
+      
+      this.orchestrator.register('Goal', goalComponent, ['Database', 'Activity']);
+      
       // Create Express application
       const expressComponent = await this._createExpressApp();
       
       this.orchestrator.register('Express', expressComponent, [
         'Auth', 
-        'Activity'
+        'Activity',
+        'Goal'  // Add Goal as dependency for Express
       ]);
       
       // Initialize all components through orchestrator

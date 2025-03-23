@@ -5,8 +5,8 @@ document.addEventListener('DOMContentLoaded', function() {
     window.goalsManager = new GoalsManager();
     
     // Initialize with the current activity if available
-    if (window.activity_types&& window.activity_types.length > 0) {
-      window.goalsManager.init(window.activity_types[0]);
+    if (window.activity_types  && window.activity_types .length > 0) {
+      window.goalsManager.init(window.activity_types [0]);
     }
   }
   

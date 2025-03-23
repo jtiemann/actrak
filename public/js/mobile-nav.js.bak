@@ -90,7 +90,7 @@ class MobileNavigation {
     // Create menu items
     const menuItems = [
       { label: 'Dashboard', icon: 'fa-home', action: () => this.closeMobileMenu() },
-      { label: 'activity_types', icon: 'fa-running', action: () => this.closeMobileMenu() },
+      { label: 'activity_types ', icon: 'fa-running', action: () => this.closeMobileMenu() },
       { label: 'Goals', icon: 'fa-bullseye', action: () => this.closeMobileMenu() },
       { label: 'Settings', icon: 'fa-cog', action: () => this.closeMobileMenu() }
     ];
