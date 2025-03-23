@@ -1,0 +1,639 @@
+const Component = require('../../core/component-class');
+
+/**
+ * Analytics Component
+ * Handles data analysis and reporting
+ */
+class AnalyticsComponent extends Component {
+  /**
+   * Create a new analytics component
+   * @param {Object} options - Component options
+   */
+  constructor(options = {}) {
+    super('Analytics', options);
+  }
+
+  /**
+   * Initialize component
+   */
+  async _init() {
+    // Get database dependency
+    this.db = this.getDependency('Database');
+    
+    if (!this.db) {
+      throw new Error('Database dependency not available');
+    }
+    
+    // Get activity dependency
+    this.activityComponent = this.getDependency('Activity');
+    
+    if (!this.activityComponent) {
+      throw new Error('Activity component dependency not available');
+    }
+    
+    // Get goal dependency
+    this.goalComponent = this.getDependency('Goal');
+    
+    if (!this.goalComponent) {
+      throw new Error('Goal component dependency not available');
+    }
+    
+    // Register event handlers
+    this.registerEvents();
+    
+    return true;
+  }
+
+  /**
+   * Register event handlers
+   */
+  registerEvents() {
+    // Call parent method to register default events
+    super.registerEvents();
+    
+    // Analytics-specific events
+    this.subscribe('log:created', this._handleLogCreated.bind(this));
+    this.subscribe('log:updated', this._handleLogUpdated.bind(this));
+    this.subscribe('goal:achieved', this._handleGoalAchieved.bind(this));
+    this.subscribe('achievement:earned', this._handleAchievementEarned.bind(this));
+  }
+
+  /**
+   * Handle log created event
+   * @param {Object} data - Log data
+   */
+  async _handleLogCreated(data) {
+    try {
+      // Update analytics data for new logs
+      await this._updateUserActivityStats(data.userId, data.activityId);
+    } catch (error) {
+      console.error('[Analytics] Error handling log created event:', error);
+    }
+  }
+
+  /**
+   * Handle log updated event
+   * @param {Object} data - Log data
+   */
+  async _handleLogUpdated(data) {
+    try {
+      // Update analytics data for updated logs
+      await this._updateUserActivityStats(data.userId, data.activityId);
+    } catch (error) {
+      console.error('[Analytics] Error handling log updated event:', error);
+    }
+  }
+
+  /**
+   * Handle goal achieved event
+   * @param {Object} data - Goal data
+   */
+  async _handleGoalAchieved(data) {
+    try {
+      // Update analytics data for achieved goals
+      await this._updateUserGoalStats(data.userId);
+    } catch (error) {
+      console.error('[Analytics] Error handling goal achieved event:', error);
+    }
+  }
+
+  /**
+   * Handle achievement earned event
+   * @param {Object} data - Achievement data
+   */
+  async _handleAchievementEarned(data) {
+    try {
+      // Update analytics data for earned achievements
+      await this._updateUserAchievementStats(data.userId);
+    } catch (error) {
+      console.error('[Analytics] Error handling achievement earned event:', error);
+    }
+  }
+
+  /**
+   * Update user activity statistics
+   * @param {number} userId - User ID
+   * @param {number} activityId - Activity ID
+   * @returns {Promise<void>}
+   */
+  async _updateUserActivityStats(userId, activityId) {
+    // Implementation would update analytics data for the user and activity
+    // This could involve updating cached statistics, streak data, etc.
+  }
+
+  /**
+   * Update user goal statistics
+   * @param {number} userId - User ID
+   * @returns {Promise<void>}
+   */
+  async _updateUserGoalStats(userId) {
+    // Implementation would update analytics data for user goals
+  }
+
+  /**
+   * Update user achievement statistics
+   * @param {number} userId - User ID
+   * @returns {Promise<void>}
+   */
+  async _updateUserAchievementStats(userId) {
+    // Implementation would update analytics data for user achievements
+  }
+
+  /**
+   * Get active days for a user
+   * @param {number} userId - User ID
+   * @param {Date} startDate - Start date
+   * @param {Date} endDate - End date
+   * @returns {Promise<Array>} Array of active days
+   */
+  async _getActiveDays(userId, startDate, endDate) {
+    try {
+      const query = `
+        SELECT DISTINCT DATE(logged_at) as active_day
+        FROM activity_logs
+        WHERE user_id = $1
+          AND logged_at >= $2
+          AND logged_at <= $3
+        ORDER BY active_day
+      `;
+      
+      const result = await this.db.query(query, [userId, startDate, endDate]);
+      return result.rows.map(row => row.active_day);
+    } catch (error) {
+      console.error('[Analytics] Error getting active days:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get user activity summary
+   * @param {number} userId - User ID
+   * @param {Date} startDate - Start date (optional)
+   * @param {Date} endDate - End date (optional)
+   * @returns {Promise<Object>} Activity summary
+   */
+  async getUserActivitySummary(userId, startDate = null, endDate = null) {
+    try {
+      // Set default dates if not provided
+      if (!startDate) {
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30); // Last 30 days
+      }
+      
+      if (!endDate) {
+        endDate = new Date();
+      }
+      
+      // Get total activity counts
+      const totalQuery = `
+        SELECT 
+          at.activity_type_id,
+          at.name,
+          at.unit,
+          COALESCE(SUM(al.count), 0) as total_count,
+          COUNT(DISTINCT DATE(al.logged_at)) as active_days,
+          MIN(al.logged_at) as first_log,
+          MAX(al.logged_at) as last_log
+        FROM activity_types at
+        LEFT JOIN activity_logs al ON at.activity_type_id = al.activity_type_id 
+          AND al.user_id = $1
+          AND al.logged_at >= $2
+          AND al.logged_at <= $3
+        WHERE at.user_id = $1
+        GROUP BY at.activity_type_id, at.name, at.unit
+        ORDER BY total_count DESC
+      `;
+      
+      const totalResult = await this.db.query(totalQuery, [userId, startDate, endDate]);
+      
+      // Calculate overall stats
+      const activityStats = totalResult.rows;
+      const totalActivities = activityStats.length;
+      const activeActivities = activityStats.filter(a => a.total_count > 0).length;
+      
+      // Calculate active days percentage
+      const daysDiff = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+      const activeDays = await this._getActiveDays(userId, startDate, endDate);
+      const activeDaysPercent = Math.round((activeDays.length / daysDiff) * 100);
+      
+      // Get most consistent activity (highest active days)
+      const mostConsistent = [...activityStats].sort((a, b) => b.active_days - a.active_days)[0];
+      
+      // Get most frequent activity (highest count)
+      const mostFrequent = [...activityStats].sort((a, b) => b.total_count - a.total_count)[0];
+      
+      return {
+        userId,
+        period: {
+          startDate,
+          endDate,
+          totalDays: daysDiff,
+          activeDays: activeDays.length,
+          activeDaysPercent
+        },
+        activities: {
+          total: totalActivities,
+          active: activeActivities,
+          mostConsistent: mostConsistent?.total_count > 0 ? {
+            name: mostConsistent.name,
+            activeDays: mostConsistent.active_days,
+            activeDaysPercent: Math.round((mostConsistent.active_days / daysDiff) * 100)
+          } : null,
+          mostFrequent: mostFrequent?.total_count > 0 ? {
+            name: mostFrequent.name,
+            totalCount: mostFrequent.total_count,
+            unit: mostFrequent.unit
+          } : null
+        },
+        activityBreakdown: activityStats
+      };
+    } catch (error) {
+      console.error('[Analytics] Error getting user activity summary:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get activity breakdown by time period
+   * @param {number} userId - User ID
+   * @param {Date} startDate - Start date (optional)
+   * @param {Date} endDate - End date (optional)
+   * @param {string} groupBy - Group by period (daily, weekly, monthly)
+   * @returns {Promise<Object>} Activity breakdown
+   */
+  async getActivityBreakdown(userId, startDate = null, endDate = null, groupBy = 'daily') {
+    try {
+      // Set default dates if not provided
+      if (!startDate) {
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30); // Last 30 days
+      }
+      
+      if (!endDate) {
+        endDate = new Date();
+      }
+      
+      // Build date grouping SQL
+      let dateGroup, periodFormat;
+      
+      switch (groupBy) {
+        case 'weekly':
+          dateGroup = "DATE_TRUNC('week', logged_at)";
+          periodFormat = 'YYYY-WW';
+          break;
+        case 'monthly':
+          dateGroup = "DATE_TRUNC('month', logged_at)";
+          periodFormat = 'YYYY-MM';
+          break;
+        case 'daily':
+        default:
+          dateGroup = 'DATE(logged_at)';
+          periodFormat = 'YYYY-MM-DD';
+          groupBy = 'daily';
+      }
+      
+      // Get activity types
+      const activityTypes = await this.activityComponent.getAllActivities(userId);
+      
+      // Get activity breakdown
+      const query = `
+        SELECT 
+          ${dateGroup} as period,
+          activity_type_id,
+          SUM(count) as total
+        FROM activity_logs
+        WHERE user_id = $1
+          AND logged_at >= $2
+          AND logged_at <= $3
+        GROUP BY period, activity_type_id
+        ORDER BY period ASC, activity_type_id
+      `;
+      
+      const result = await this.db.query(query, [userId, startDate, endDate]);
+      
+      // Process results into a structured format
+      const breakdownByPeriod = {};
+      const activityMap = {};
+      
+      // Create activity ID to name mapping
+      activityTypes.forEach(activity => {
+        activityMap[activity.activity_type_id] = {
+          name: activity.name,
+          unit: activity.unit
+        };
+      });
+      
+      // Group by period
+      result.rows.forEach(row => {
+        const period = row.period.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+        
+        if (!breakdownByPeriod[period]) {
+          breakdownByPeriod[period] = {
+            period,
+            activities: {}
+          };
+        }
+        
+        const activityId = row.activity_type_id;
+        const activity = activityMap[activityId] || { name: `Activity ${activityId}`, unit: 'units' };
+        
+        breakdownByPeriod[period].activities[activity.name] = {
+          total: parseFloat(row.total),
+          unit: activity.unit
+        };
+      });
+      
+      // Convert to array and sort by period
+      const breakdown = Object.values(breakdownByPeriod).sort((a, b) => {
+        return new Date(a.period) - new Date(b.period);
+      });
+      
+      return {
+        userId,
+        groupBy,
+        startDate,
+        endDate,
+        activities: activityTypes.map(a => ({ id: a.activity_type_id, name: a.name, unit: a.unit })),
+        breakdown
+      };
+    } catch (error) {
+      console.error('[Analytics] Error getting activity breakdown:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get activity trends for a single activity
+   * @param {number} userId - User ID
+   * @param {number} activityId - Activity ID (optional, if null then all activities)
+   * @param {string} period - Period type (weekly, monthly)
+   * @param {number} limit - Number of periods to include
+   * @returns {Promise<Object>} Activity trends
+   */
+  async getActivityTrends(userId, activityId = null, period = 'weekly', limit = 12) {
+    try {
+      // Build date grouping SQL
+      let dateGroup, periodFormat;
+      
+      switch (period) {
+        case 'monthly':
+          dateGroup = "DATE_TRUNC('month', logged_at)";
+          periodFormat = 'YYYY-MM';
+          break;
+        case 'weekly':
+        default:
+          dateGroup = "DATE_TRUNC('week', logged_at)";
+          periodFormat = 'YYYY-WW';
+          period = 'weekly';
+      }
+      
+      // Build query
+      let query;
+      let params;
+      
+      if (activityId) {
+        // Specific activity
+        query = `
+          SELECT 
+            ${dateGroup} as period,
+            COALESCE(SUM(count), 0) as total,
+            COUNT(DISTINCT DATE(logged_at)) as active_days
+          FROM activity_logs
+          WHERE user_id = $1
+            AND activity_type_id = $2
+          GROUP BY period
+          ORDER BY period DESC
+          LIMIT $3
+        `;
+        
+        params = [userId, activityId, limit];
+      } else {
+        // All activities
+        query = `
+          SELECT 
+            ${dateGroup} as period,
+            activity_type_id,
+            COALESCE(SUM(count), 0) as total,
+            COUNT(DISTINCT DATE(logged_at)) as active_days
+          FROM activity_logs
+          WHERE user_id = $1
+          GROUP BY period, activity_type_id
+          ORDER BY period DESC, activity_type_id
+        `;
+        
+        params = [userId];
+      }
+      
+      const result = await this.db.query(query, params);
+      
+      // Process results as appropriate for the query type
+      // Implementation would format data for trends visualization
+      
+      return {
+        userId,
+        period,
+        limit,
+        trends: {} // Formatted trend data would go here
+      };
+    } catch (error) {
+      console.error('[Analytics] Error getting activity trends:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get goal progress summary
+   * @param {number} userId - User ID
+   * @returns {Promise<Object>} Goal progress summary
+   */
+  async getGoalProgressSummary(userId) {
+    try {
+      // Get all goals for user
+      const goals = await this.goalComponent.getUserGoals(userId);
+      
+      // Get progress for each goal
+      const goalProgress = await Promise.all(
+        goals.map(async goal => {
+          const progress = await this.goalComponent.getGoalProgress(goal.goal_id);
+          
+          // Get activity details
+          const activity = await this.activityComponent.getActivityById(goal.activity_type_id);
+          
+          return {
+            goalId: goal.goal_id,
+            name: goal.name || activity.name,
+            activityName: activity.name,
+            targetCount: goal.target_count,
+            unit: activity.unit,
+            periodType: goal.period_type,
+            startDate: goal.start_date,
+            endDate: goal.end_date,
+            isActive: goal.is_active,
+            isCompleted: goal.is_completed,
+            completedAt: goal.completed_at,
+            progress: {
+              currentCount: progress.currentCount,
+              progressPercent: progress.progressPercent,
+              remaining: progress.remaining,
+              completed: progress.completed
+            }
+          };
+        })
+      );
+      
+      // Calculate summary statistics
+      const activeGoals = goalProgress.filter(g => g.isActive && !g.isCompleted);
+      const completedGoals = goalProgress.filter(g => g.isCompleted);
+      const inProgressGoals = goalProgress.filter(g => g.isActive && !g.isCompleted && g.progress.progressPercent > 0);
+      
+      // Calculate goal completion rate
+      const completionRate = goals.length > 0 ? 
+        Math.round((completedGoals.length / goals.length) * 100) : 0;
+      
+      return {
+        userId,
+        summary: {
+          totalGoals: goals.length,
+          activeGoals: activeGoals.length,
+          completedGoals: completedGoals.length,
+          inProgressGoals: inProgressGoals.length,
+          completionRate
+        },
+        goals: goalProgress
+      };
+    } catch (error) {
+      console.error('[Analytics] Error getting goal progress summary:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get insights and recommendations for a user
+   * @param {number} userId - User ID
+   * @returns {Promise<Object>} Insights and recommendations
+   */
+  async getUserInsights(userId) {
+    try {
+      // Get user's recent activity (last 30 days)
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+      
+      // Get activity summary
+      const summary = await this.getUserActivitySummary(userId, startDate, endDate);
+      
+      // Get goal progress
+      const goalSummary = await this.getGoalProgressSummary(userId);
+      
+      // Generate insights
+      const insights = [];
+      
+      // Implementation would analyze user data and generate insights
+      // based on activity patterns, goal progress, etc.
+      
+      return {
+        userId,
+        insights,
+        summary: {
+          activeDays: summary.period.activeDaysPercent,
+          activeActivities: summary.activities.active,
+          totalActivities: summary.activities.total,
+          completedGoals: goalSummary.summary.completedGoals,
+          activeGoals: goalSummary.summary.activeGoals
+        }
+      };
+    } catch (error) {
+      console.error('[Analytics] Error getting user insights:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Export user data
+   * @param {number} userId - User ID
+   * @param {string} format - Export format (json, csv, xlsx)
+   * @param {Date} startDate - Start date (optional)
+   * @param {Date} endDate - End date (optional)
+   * @returns {Promise<Object|string|Buffer>} Exported data
+   */
+  async exportUserData(userId, format = 'json', startDate = null, endDate = null) {
+    try {
+      // Implementation would format and export user data in the requested format
+      return {
+        userId,
+        format,
+        timestamp: new Date()
+      };
+    } catch (error) {
+      console.error('[Analytics] Error exporting user data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get system-wide statistics (admin only)
+   * @returns {Promise<Object>} System statistics
+   */
+  async getSystemStatistics() {
+    try {
+      // Implementation would fetch and format system-wide statistics
+      return {
+        users: {
+          total: 0,
+          newLast7Days: 0
+        },
+        activities: {
+          totalTypes: 0,
+          totalLogs: 0
+        },
+        goals: {
+          total: 0,
+          completed: 0
+        },
+        timestamp: new Date()
+      };
+    } catch (error) {
+      console.error('[Analytics] Error getting system statistics:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user engagement metrics (admin only)
+   * @param {string} period - Period type (daily, weekly, monthly)
+   * @param {Date} startDate - Start date (optional)
+   * @param {Date} endDate - End date (optional)
+   * @returns {Promise<Object>} User engagement metrics
+   */
+  async getUserEngagementMetrics(period = 'weekly', startDate = null, endDate = null) {
+    try {
+      // Implementation would fetch and calculate user engagement metrics
+      return {
+        period,
+        startDate,
+        endDate,
+        metrics: []
+      };
+    } catch (error) {
+      console.error('[Analytics] Error getting user engagement metrics:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get most popular activities (admin only)
+   * @param {number} limit - Number of activities to return
+   * @returns {Promise<Array>} Popular activities
+   */
+  async getMostPopularActivities(limit = 10) {
+    try {
+      // Implementation would fetch and rank activities by popularity
+      return [];
+    } catch (error) {
+      console.error('[Analytics] Error getting popular activities:', error);
+      throw error;
+    }
+  }
+}
+
+module.exports = AnalyticsComponent;

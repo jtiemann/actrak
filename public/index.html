@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Activity Tracker - Track your progress and stay motivated">
+    <title>Activity Tracker</title>
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/goals.css">
+</head>
+<body>
+    <!-- Skip to content link for accessibility -->
+    <a href="#app-container" class="skip-link">Skip to content</a>
+    
+    <!-- Login Screen -->
+    <div id="login-screen" class="login-container" role="dialog" aria-labelledby="login-title">
+        <h2 id="login-title" class="login-title">Activity Tracker</h2>
+        <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" placeholder="Enter username" aria-required="true">
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="Enter password" aria-required="true">
+        </div>
+        <button id="login-btn">Login</button>
+        <p id="login-error" style="color: var(--danger); margin-top: 10px; text-align: center;" aria-live="polite"></p>
+    </div>
+
+    <!-- Main App (initially hidden) -->
+    <div id="app-container" class="container hidden" role="main">
+        <div class="user-info">
+            <span class="user-name" id="user-name"></span>
+            <button class="logout-btn btn-danger" id="logout-btn">Logout</button>
+        </div>
+        
+        <header>
+            <h1 id="app-title">Activity Tracker</h1>
+            <p>Track your progress and stay motivated</p>
+        </header>
+        
+        <div class="card" role="form" aria-labelledby="activity-form-title">
+            <h2 id="activity-form-title" class="card-title">
+                <span>Track Your Activity</span>
+            </h2>
+            
+            <div class="form-group">
+                <label for="activity-type">Activity Type</label>
+                <div class="input-group">
+                    <select id="activity-type" aria-required="true"></select>
+                    <button id="new-activity-btn" class="btn-success">New Activity</button>
+                </div>
+            </div>
+            
+            <div id="create-activity-form" style="display: none;">
+                <div class="form-group">
+                    <label for="new-activity-name">Create New Activity</label>
+                    <div class="create-activity">
+                        <input type="text" id="new-activity-name" placeholder="e.g. Push-ups, Running, Meditation" aria-required="true">
+                        <input type="text" id="new-activity-unit" placeholder="e.g. reps, minutes, miles" aria-required="true">
+                        <button id="save-activity-btn">Save</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="count">Count</label>
+                <input type="number" id="count" min="1" value="10" aria-required="true">
+            </div>
+            
+            <div class="form-group">
+                <label for="unit" id="unit-label">Units</label>
+                <input type="text" id="unit" placeholder="e.g. reps, minutes, miles" aria-required="true">
+            </div>
+            
+            <div class="form-group">
+                <label for="notes">Notes (optional)</label>
+                <input type="text" id="notes" placeholder="How did it go?">
+            </div>
+            
+            <div class="form-group">
+                <label for="date">Date & Time</label>
+                <input type="datetime-local" id="date" aria-required="true">
+            </div>
+            
+            <button id="log-button">Log Activity</button>
+        </div>
+        
+        <div class="card" aria-labelledby="stats-title">
+            <h2 id="stats-title" class="card-title">Your Stats</h2>
+            <div class="stats" role="group" aria-label="Activity statistics">
+                <div class="stat-card">
+                    <div class="stat-title">Today</div>
+                    <div class="stat-value" id="today-count" aria-live="polite">0</div>
+                    <div id="today-unit">units</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">This Week</div>
+                    <div class="stat-value" id="week-count" aria-live="polite">0</div>
+                    <div id="week-unit">units</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">This Month</div>
+                    <div class="stat-value" id="month-count" aria-live="polite">0</div>
+                    <div id="month-unit">units</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Year to Date</div>
+                    <div class="stat-value" id="year-count" aria-live="polite">0</div>
+                    <div id="year-unit">units</div>
+                </div>
+            </div>
+        </div>
+        
+        
+        <!-- Goals Card -->
+        <div class="card" aria-labelledby="goals-title">
+            <h2 id="goals-title" class="card-title">
+                <span>Activity Goals</span>
+                <button id="add-goal-btn" class="add-goal-btn">
+                    <i class="fas fa-plus"></i> Add Goal
+                </button>
+            </h2>
+            <div id="goals-container" class="goals-section" role="region" aria-live="polite">
+                <!-- Goals will be added here dynamically -->
+                <div class="empty-state">
+                    <p>No goals set yet. Click "Add Goal" to create one!</p>
+                </div>
+            </div>
+        </div>
+        
+<div class="card" aria-labelledby="history-title">
+            <h2 id="history-title" class="card-title">Your History</h2>
+            <div id="log-container" class="log-container" role="region" aria-live="polite">
+                <div class="empty-state" id="empty-state">
+                    <p>No activities logged yet. Start tracking today!</p>
+                </div>
+                <!-- Log items will be added here dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom scripts -->
+    <script src="js/theme.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/mobile-nav.js"></script>
+    <script src="js/fetch-debugger.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/auth-fix.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/direct-api.js"></script>
+    <script src="js/goals.js"></script>
+    <script src="js/app.js"></script>
+
+    <!-- Goals Form (initially hidden) -->
+    <div id="goal-form-container" class="goal-form-container hidden">
+        <div class="goal-form-card">
+            <button id="goal-form-close" class="goal-form-close" aria-label="Close form">
+                <i class="fas fa-times"></i>
+            </button>
+            <h3 id="goal-form-title" class="goal-form-title">Add New Goal</h3>
+            <form id="goal-form" data-mode="add">
+                <div class="form-group">
+                    <label for="goal-activity">Activity</label>
+                    <input type="text" id="goal-activity" disabled>
+                </div>
+                <div class="form-group">
+                    <label for="goal-target-count">Target Count</label>
+                    <input type="number" id="goal-target-count" min="1" placeholder="e.g. 100" required>
+                </div>
+                <div class="form-group">
+                    <label for="goal-period-type">Period Type</label>
+                    <select id="goal-period-type" required>
+                        <option value="daily">Daily</option>
+                        <option value="weekly" selected>Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="goal-start-date">Start Date</label>
+                    <input type="date" id="goal-start-date" required>
+                </div>
+                <div class="form-group">
+                    <label for="goal-end-date">End Date</label>
+                    <input type="date" id="goal-end-date" required>
+                </div>
+                <div class="goal-form-actions">
+                    <button type="button" id="cancel-goal-btn" class="btn-danger">Cancel</button>
+                    <button type="submit" id="goal-submit-btn">Add Goal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script src="js/fix-goal-button.js"></script>
+    <script src="js/goals-fix.js"></script>
+</body>
+</html>

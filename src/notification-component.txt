@@ -1,0 +1,1060 @@
+const nodemailer = require('nodemailer');
+const Component = require('../core/Component');
+const configManager = require('../core/ConfigManager');
+
+/**
+ * Notification Component
+ * Handles emails, push notifications, and in-app notifications
+ */
+class NotificationComponent extends Component {
+  /**
+   * Create a new notification component
+   * @param {Object} options - Component options
+   */
+  constructor(options = {}) {
+    super('Notification', options);
+    
+    // Email transporter
+    this.emailTransporter = null;
+    
+    // Job scheduling
+    this.scheduledJobs = new Map();
+    
+    // Notification templates
+    this.templates = new Map();
+  }
+
+  /**
+   * Initialize component
+   */
+  async _init() {
+    // Get database dependency
+    this.db = this.getDependency('Database');
+    
+    if (!this.db) {
+      throw new Error('Database dependency not available');
+    }
+    
+    // Initialize email transporter
+    await this._initEmailTransporter();
+    
+    // Load notification templates
+    await this._loadTemplates();
+    
+    // Schedule recurring notifications
+    this._scheduleRecurringNotifications();
+    
+    // Register event handlers
+    this.registerEvents();
+    
+    return true;
+  }
+
+  /**
+   * Register event handlers
+   */
+  registerEvents() {
+    // Call parent method to register default events
+    super.registerEvents();
+    
+    // Notification-specific events
+    this.subscribe('user:created', this._handleUserCreated.bind(this));
+    this.subscribe('user:password_reset_requested', this._handlePasswordResetRequested.bind(this));
+    this.subscribe('goal:achieved', this._handleGoalAchieved.bind(this));
+    this.subscribe('achievement:earned', this._handleAchievementEarned.bind(this));
+  }
+
+  /**
+   * Initialize email transporter
+   */
+  async _initEmailTransporter() {
+    try {
+      const emailConfig = configManager.getConfig('email');
+      
+      // Create reusable transporter object with SMTP configuration
+      this.emailTransporter = nodemailer.createTransport({
+        host: emailConfig.host,
+        port: emailConfig.port,
+        secure: emailConfig.secure,
+        auth: {
+          user: emailConfig.user,
+          pass: emailConfig.password
+        }
+      });
+      
+      // Verify connection
+      await this.emailTransporter.verify();
+      
+      if (this.debug) {
+        console.log('[Notification] Email transport initialized successfully');
+      }
+    } catch (error) {
+      console.error('[Notification] Error initializing email transport:', error);
+      
+      // Create a development transporter if in development mode
+      if (process.env.NODE_ENV === 'development') {
+        this.emailTransporter = nodemailer.createTransport({
+          host: 'smtp.ethereal.email',
+          port: 587,
+          secure: false,
+          auth: {
+            user: 'ethereal.user@ethereal.email',
+            pass: 'ethereal.password'
+          }
+        });
+        
+        console.log('[Notification] Using development email transport');
+      }
+    }
+  }
+
+  /**
+   * Load notification templates
+   */
+  async _loadTemplates() {
+    try {
+      // In a real implementation, templates would be loaded from a database or files
+      // Here, we'll define them inline for simplicity
+      
+      // Welcome email template
+      this.templates.set('welcome_email', {
+        subject: 'Welcome to Activity Tracker!',
+        text: `
+          Hello {{username}},
+          
+          Welcome to Activity Tracker! We're excited to have you on board.
+          
+          With Activity Tracker, you can:
+          - Track multiple activities with custom units
+          - Set goals and earn achievements
+          - View statistics and visualize your progress
+          - Export your data to CSV or PDF
+          
+          Let us know if you have any questions or feedback.
+          
+          Best regards,
+          The Activity Tracker Team
+        `,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #4361ee;">Welcome to Activity Tracker!</h1>
+            <p>Hello {{username}},</p>
+            <p>Welcome to Activity Tracker! We're excited to have you on board.</p>
+            <p>With Activity Tracker, you can:</p>
+            <ul>
+              <li>Track multiple activities with custom units</li>
+              <li>Set goals and earn achievements</li>
+              <li>View statistics and visualize your progress</li>
+              <li>Export your data to CSV or PDF</li>
+            </ul>
+            <p>Let us know if you have any questions or feedback.</p>
+            <p>Best regards,<br>The Activity Tracker Team</p>
+          </div>
+        `
+      });
+      
+      // Password reset template
+      this.templates.set('password_reset', {
+        subject: 'Password Reset Request',
+        text: `
+          Hello {{username}},
+          
+          We received a request to reset your password for Activity Tracker.
+          
+          To reset your password, click the link below:
+          {{resetLink}}
+          
+          If you didn't request this password reset, you can ignore this email.
+          
+          Best regards,
+          The Activity Tracker Team
+        `,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #4361ee;">Password Reset Request</h1>
+            <p>Hello {{username}},</p>
+            <p>We received a request to reset your password for Activity Tracker.</p>
+            <p>To reset your password, click the button below:</p>
+            <p style="text-align: center; margin: 30px 0;">
+              <a href="{{resetLink}}" style="background-color: #4361ee; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+                Reset Password
+              </a>
+            </p>
+            <p>If you didn't request this password reset, you can ignore this email.</p>
+            <p>Best regards,<br>The Activity Tracker Team</p>
+          </div>
+        `
+      });
+      
+      // Goal achieved template
+      this.templates.set('goal_achieved', {
+        subject: 'Goal Achieved! 🏆',
+        text: `
+          Hello {{username}},
+          
+          Congratulations! You've achieved your goal:
+          
+          {{goalName}}: {{goalTarget}} {{goalUnit}} ({{goalPeriod}})
+          
+          Keep up the excellent work!
+          
+          Best regards,
+          The Activity Tracker Team
+        `,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #4361ee;">Goal Achieved! 🏆</h1>
+            <p>Hello {{username}},</p>
+            <div style="background-color: #f5f7fa; border-radius: 5px; padding: 20px; margin: 20px 0; text-align: center;">
+              <h2 style="color: #2ec4b6; margin-top: 0;">Congratulations!</h2>
+              <p style="font-size: 18px;">You've achieved your goal:</p>
+              <div style="background-color: #2ec4b6; color: white; border-radius: 5px; padding: 15px; margin: 15px 0;">
+                <h3 style="margin: 0;">{{goalName}}</h3>
+                <p style="margin: 5px 0; font-size: 20px; font-weight: bold;">{{goalTarget}} {{goalUnit}}</p>
+                <p style="margin: 5px 0;">{{goalPeriod}}</p>
+              </div>
+            </div>
+            <p>Keep up the excellent work!</p>
+            <p>Best regards,<br>The Activity Tracker Team</p>
+          </div>
+        `
+      });
+      
+      // Achievement earned template
+      this.templates.set('achievement_earned', {
+        subject: 'New Achievement Unlocked! 🏅',
+        text: `
+          Hello {{username}},
+          
+          Congratulations! You've earned a new achievement:
+          
+          {{achievementName}}
+          {{achievementDescription}}
+          
+          Keep up the excellent work!
+          
+          Best regards,
+          The Activity Tracker Team
+        `,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #4361ee;">New Achievement Unlocked! 🏅</h1>
+            <p>Hello {{username}},</p>
+            <div style="background-color: #f5f7fa; border-radius: 5px; padding: 20px; margin: 20px 0; text-align: center;">
+              <h2 style="color: #e63946; margin-top: 0;">Congratulations!</h2>
+              <p style="font-size: 18px;">You've earned a new achievement:</p>
+              <div style="background-color: #4361ee; color: white; border-radius: 5px; padding: 15px; margin: 15px 0;">
+                <h3 style="margin: 0;">{{achievementName}}</h3>
+                <p style="margin: 10px 0;">{{achievementDescription}}</p>
+                <p style="margin: 5px 0; font-style: italic;">Earned on {{earnedDate}}</p>
+              </div>
+              {{#if customMessage}}
+              <p style="font-style: italic;">{{customMessage}}</p>
+              {{/if}}
+            </div>
+            <p>Keep up the excellent work!</p>
+            <p>Best regards,<br>The Activity Tracker Team</p>
+          </div>
+        `
+      });
+      
+      // Weekly report template
+      this.templates.set('weekly_report', {
+        subject: 'Your Weekly Activity Report',
+        text: `
+          Hello {{username}},
+          
+          Here's your weekly Activity Tracker report:
+          
+          {{#each activities}}
+          {{name}}:
+          - This week: {{week}} {{unit}}
+          - Last week: {{lastWeek}} {{unit}}
+          - Change: {{change}} {{unit}} ({{percentChange}}%)
+          {{/each}}
+          
+          {{#each goals}}
+          {{name}} ({{target}} {{unit}} {{periodType}}):
+          - Current: {{current}} {{unit}}
+          - Progress: {{progress}}%
+          - Remaining: {{remaining}} {{unit}}
+          {{/each}}
+          
+          Keep up the good work!
+          
+          Best regards,
+          The Activity Tracker Team
+        `,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #4361ee;">Your Weekly Activity Report</h1>
+            <p>Hello {{username}},</p>
+            <p>Here's your weekly Activity Tracker report:</p>
+            
+            <h2 style="color: #4361ee; margin-top: 30px;">Activity Summary</h2>
+            <div style="margin-bottom: 20px;">
+            {{#each activities}}
+              <div style="margin-bottom: 15px; padding: 15px; border-radius: 5px; background-color: #f5f7fa;">
+                <h3 style="margin-top: 0;">{{name}}</h3>
+                <div style="display: flex; justify-content: space-between;">
+                  <div>
+                    <p style="margin: 5px 0;"><strong>This week:</strong> {{week}} {{unit}}</p>
+                    <p style="margin: 5px 0;"><strong>Last week:</strong> {{lastWeek}} {{unit}}</p>
+                  </div>
+                  <div>
+                    <p style="margin: 5px 0; color: {{changeColor}};">
+                      <strong>Change:</strong> {{change}} {{unit}} ({{percentChange}}%)
+                    </p>
+                  </div>
+                </div>
+              </div>
+            {{/each}}
+            </div>
+            
+            <h2 style="color: #4361ee; margin-top: 30px;">Goal Progress</h2>
+            <div style="margin-bottom: 20px;">
+            {{#each goals}}
+              <div style="margin-bottom: 15px; padding: 15px; border-radius: 5px; background-color: #f5f7fa;">
+                <h3 style="margin-top: 0;">{{name}}</h3>
+                <p style="margin: 5px 0;"><strong>Target:</strong> {{target}} {{unit}} ({{periodType}})</p>
+                <p style="margin: 5px 0;"><strong>Current:</strong> {{current}} {{unit}}</p>
+                <div style="margin: 10px 0;">
+                  <div style="background-color: #dee2e6; height: 10px; border-radius: 5px; overflow: hidden;">
+                    <div style="background-color: {{progressColor}}; height: 100%; width: {{progressWidth}}%;"></div>
+                  </div>
+                  <p style="margin: 5px 0; text-align: right;">
+                    <strong>{{progress}}%</strong> ({{remaining}} {{unit}} remaining)
+                  </p>
+                </div>
+              </div>
+            {{/each}}
+            </div>
+            
+            <p style="margin-top: 30px;">Keep up the good work!</p>
+            <p>Best regards,<br>The Activity Tracker Team</p>
+          </div>
+        `
+      });
+      
+      if (this.debug) {
+        console.log('[Notification] Loaded notification templates');
+      }
+    } catch (error) {
+      console.error('[Notification] Error loading notification templates:', error);
+    }
+  }
+
+  /**
+   * Schedule recurring notifications
+   */
+  _scheduleRecurringNotifications() {
+    try {
+      // Schedule weekly reports (every Sunday at 8:00 AM)
+      this._scheduleWeeklyReports();
+      
+      // Schedule daily reminders (every day at 8:00 AM)
+      this._scheduleDailyReminders();
+      
+      if (this.debug) {
+        console.log('[Notification] Scheduled recurring notifications');
+      }
+    } catch (error) {
+      console.error('[Notification] Error scheduling recurring notifications:', error);
+    }
+  }
+
+  /**
+   * Schedule weekly reports
+   */
+  _scheduleWeeklyReports() {
+    // Calculate time until next Sunday at 8:00 AM
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 for Sunday, 1 for Monday, etc.
+    const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+    
+    const nextSunday = new Date(now);
+    nextSunday.setDate(now.getDate() + daysUntilSunday);
+    nextSunday.setHours(8, 0, 0, 0);
+    
+    // If today is Sunday and it's past 8:00 AM, schedule for next Sunday
+    if (dayOfWeek === 0 && now.getHours() >= 8) {
+      nextSunday.setDate(nextSunday.getDate() + 7);
+    }
+    
+    // Calculate milliseconds until next Sunday at 8:00 AM
+    const msUntilSunday = nextSunday.getTime() - now.getTime();
+    
+    // Schedule weekly reports
+    const weeklyReportJob = setTimeout(() => {
+      this.sendWeeklyReports();
+      
+      // Schedule again for next week
+      const weeklyInterval = setInterval(() => {
+        this.sendWeeklyReports();
+      }, 7 * 24 * 60 * 60 * 1000); // 7 days
+      
+      this.scheduledJobs.set('weeklyReportsInterval', weeklyInterval);
+    }, msUntilSunday);
+    
+    this.scheduledJobs.set('weeklyReportsTimeout', weeklyReportJob);
+    
+    if (this.debug) {
+      console.log(`[Notification] Weekly reports scheduled to start in ${Math.round(msUntilSunday / (60 * 60 * 1000))} hours`);
+    }
+  }
+
+  /**
+   * Schedule daily reminders
+   */
+  _scheduleDailyReminders() {
+    // Calculate time until next 8:00 AM
+    const now = new Date();
+    const next8AM = new Date(now);
+    next8AM.setHours(8, 0, 0, 0);
+    
+    // If it's past 8:00 AM, schedule for tomorrow
+    if (now.getHours() >= 8) {
+      next8AM.setDate(next8AM.getDate() + 1);
+    }
+    
+    // Calculate milliseconds until next 8:00 AM
+    const msUntil8AM = next8AM.getTime() - now.getTime();
+    
+    // Schedule daily reminders
+    const dailyReminderJob = setTimeout(() => {
+      this.sendDailyReminders();
+      
+      // Schedule again for next day
+      const dailyInterval = setInterval(() => {
+        this.sendDailyReminders();
+      }, 24 * 60 * 60 * 1000); // 24 hours
+      
+      this.scheduledJobs.set('dailyRemindersInterval', dailyInterval);
+    }, msUntil8AM);
+    
+    this.scheduledJobs.set('dailyRemindersTimeout', dailyReminderJob);
+    
+    if (this.debug) {
+      console.log(`[Notification] Daily reminders scheduled to start in ${Math.round(msUntil8AM / (60 * 60 * 1000))} hours`);
+    }
+  }
+
+  /**
+   * Handle user created event
+   * @param {Object} data - User data
+   */
+  async _handleUserCreated(data) {
+    try {
+      const { userId, username } = data;
+      
+      // Get user email
+      const user = await this._getUserById(userId);
+      
+      if (!user || !user.email) {
+        return;
+      }
+      
+      // Send welcome email
+      await this.sendWelcomeEmail(user.email, username);
+    } catch (error) {
+      console.error('[Notification] Error handling user created event:', error);
+    }
+  }
+
+  /**
+   * Handle password reset requested event
+   * @param {Object} data - Event data
+   */
+  async _handlePasswordResetRequested(data) {
+    try {
+      const { userId, email, resetToken } = data;
+      
+      // Get user
+      const user = await this._getUserById(userId);
+      
+      if (!user) {
+        return;
+      }
+      
+      // Create reset link
+      const baseUrl = configManager.get('app.baseUrl', 'http://localhost:3001');
+      const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
+      
+      // Send password reset email
+      await this.sendPasswordResetEmail(email, user.username, resetLink);
+    } catch (error) {
+      console.error('[Notification] Error handling password reset requested event:', error);
+    }
+  }
+
+  /**
+   * Handle goal achieved event
+   * @param {Object} data - Event data
+   */
+  async _handleGoalAchieved(data) {
+    try {
+      const { userId, goalId, goalName, goalTarget, goalUnit, goalPeriod } = data;
+      
+      // Get user
+      const user = await this._getUserById(userId);
+      
+      if (!user || !user.email) {
+        return;
+      }
+      
+      // Send goal achieved email
+      await this.sendGoalAchievedEmail(
+        user.email,
+        user.username,
+        goalName,
+        goalTarget,
+        goalUnit,
+        goalPeriod
+      );
+    } catch (error) {
+      console.error('[Notification] Error handling goal achieved event:', error);
+    }
+  }
+
+  /**
+   * Handle achievement earned event
+   * @param {Object} data - Event data
+   */
+  async _handleAchievementEarned(data) {
+    try {
+      const { userId, achievementId, achievementName, achievementDescription, earnedDate, customMessage } = data;
+      
+      // Get user
+      const user = await this._getUserById(userId);
+      
+      if (!user || !user.email) {
+        return;
+      }
+      
+      // Send achievement earned email
+      await this.sendAchievementEmail(
+        user.email,
+        user.username,
+        achievementName,
+        achievementDescription,
+        earnedDate,
+        customMessage
+      );
+    } catch (error) {
+      console.error('[Notification] Error handling achievement earned event:', error);
+    }
+  }
+
+  /**
+   * Send an email
+   * @param {string} to - Recipient email
+   * @param {string} subject - Email subject
+   * @param {string} text - Plain text email body
+   * @param {string} html - HTML email body
+   * @returns {Promise<Object>} Send result
+   */
+  async sendEmail(to, subject, text, html) {
+    try {
+      if (!this.emailTransporter) {
+        throw new Error('Email transporter not initialized');
+      }
+      
+      const emailConfig = configManager.getConfig('email');
+      
+      // Define email options
+      const mailOptions = {
+        from: emailConfig.from,
+        to,
+        subject,
+        text,
+        html
+      };
+      
+      // Send email
+      const info = await this.emailTransporter.sendMail(mailOptions);
+      
+      if (this.debug) {
+        console.log('[Notification] Email sent:', info.messageId);
+      }
+      
+      return info;
+    } catch (error) {
+      console.error('[Notification] Error sending email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Render a template
+   * @param {string} templateName - Template name
+   * @param {Object} data - Template data
+   * @returns {Object} Rendered template
+   */
+  _renderTemplate(templateName, data) {
+    try {
+      const template = this.templates.get(templateName);
+      
+      if (!template) {
+        throw new Error(`Template "${templateName}" not found`);
+      }
+      
+      // Simple template rendering (replace {{variable}} with data.variable)
+      let text = template.text;
+      let html = template.html;
+      
+      // Replace variables
+      Object.keys(data).forEach(key => {
+        const regex = new RegExp(`{{${key}}}`, 'g');
+        text = text.replace(regex, data[key]);
+        html = html.replace(regex, data[key]);
+      });
+      
+      // Handle conditionals (very simple implementation)
+      const conditionalRegex = /{{#if ([^}]+)}}([\s\S]*?){{\/if}}/g;
+      
+      text = text.replace(conditionalRegex, (match, condition, content) => {
+        return data[condition] ? content : '';
+      });
+      
+      html = html.replace(conditionalRegex, (match, condition, content) => {
+        return data[condition] ? content : '';
+      });
+      
+      // Handle loops (very simple implementation)
+      const loopRegex = /{{#each ([^}]+)}}([\s\S]*?){{\/each}}/g;
+      
+      text = text.replace(loopRegex, (match, arrayName, content) => {
+        const array = data[arrayName];
+        if (!Array.isArray(array)) {
+          return '';
+        }
+        
+        return array.map(item => {
+          let itemContent = content;
+          
+          // Replace item variables
+          Object.keys(item).forEach(key => {
+            const regex = new RegExp(`{{${key}}}`, 'g');
+            itemContent = itemContent.replace(regex, item[key]);
+          });
+          
+          return itemContent;
+        }).join('\n');
+      });
+      
+      html = html.replace(loopRegex, (match, arrayName, content) => {
+        const array = data[arrayName];
+        if (!Array.isArray(array)) {
+          return '';
+        }
+        
+        return array.map(item => {
+          let itemContent = content;
+          
+          // Replace item variables
+          Object.keys(item).forEach(key => {
+            const regex = new RegExp(`{{${key}}}`, 'g');
+            itemContent = itemContent.replace(regex, item[key]);
+          });
+          
+          return itemContent;
+        }).join('');
+      });
+      
+      return {
+        subject: template.subject,
+        text,
+        html
+      };
+    } catch (error) {
+      console.error('[Notification] Error rendering template:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send welcome email
+   * @param {string} email - Recipient email
+   * @param {string} username - Username
+   * @returns {Promise<Object>} Send result
+   */
+  async sendWelcomeEmail(email, username) {
+    try {
+      const rendered = this._renderTemplate('welcome_email', { username });
+      
+      return await this.sendEmail(email, rendered.subject, rendered.text, rendered.html);
+    } catch (error) {
+      console.error('[Notification] Error sending welcome email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send password reset email
+   * @param {string} email - Recipient email
+   * @param {string} username - Username
+   * @param {string} resetLink - Password reset link
+   * @returns {Promise<Object>} Send result
+   */
+  async sendPasswordResetEmail(email, username, resetLink) {
+    try {
+      const rendered = this._renderTemplate('password_reset', { username, resetLink });
+      
+      return await this.sendEmail(email, rendered.subject, rendered.text, rendered.html);
+    } catch (error) {
+      console.error('[Notification] Error sending password reset email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send goal achieved email
+   * @param {string} email - Recipient email
+   * @param {string} username - Username
+   * @param {string} goalName - Goal name
+   * @param {number} goalTarget - Goal target
+   * @param {string} goalUnit - Goal unit
+   * @param {string} goalPeriod - Goal period
+   * @returns {Promise<Object>} Send result
+   */
+  async sendGoalAchievedEmail(email, username, goalName, goalTarget, goalUnit, goalPeriod) {
+    try {
+      const rendered = this._renderTemplate('goal_achieved', {
+        username,
+        goalName,
+        goalTarget,
+        goalUnit,
+        goalPeriod
+      });
+      
+      return await this.sendEmail(email, rendered.subject, rendered.text, rendered.html);
+    } catch (error) {
+      console.error('[Notification] Error sending goal achieved email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send achievement earned email
+   * @param {string} email - Recipient email
+   * @param {string} username - Username
+   * @param {string} achievementName - Achievement name
+   * @param {string} achievementDescription - Achievement description
+   * @param {Date} earnedDate - Date earned
+   * @param {string} customMessage - Custom message (optional)
+   * @returns {Promise<Object>} Send result
+   */
+  async sendAchievementEmail(email, username, achievementName, achievementDescription, earnedDate, customMessage = null) {
+    try {
+      const rendered = this._renderTemplate('achievement_earned', {
+        username,
+        achievementName,
+        achievementDescription,
+        earnedDate: earnedDate.toLocaleDateString(),
+        customMessage
+      });
+      
+      return await this.sendEmail(email, rendered.subject, rendered.text, rendered.html);
+    } catch (error) {
+      console.error('[Notification] Error sending achievement email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send weekly reports to all users
+   */
+  async sendWeeklyReports() {
+    try {
+      // Get all users with an email address
+      const users = await this._getUsersWithEmail();
+      
+      if (this.debug) {
+        console.log(`[Notification] Sending weekly reports to ${users.length} users`);
+      }
+      
+      for (const user of users) {
+        await this._sendWeeklyReportToUser(user);
+      }
+    } catch (error) {
+      console.error('[Notification] Error sending weekly reports:', error);
+    }
+  }
+
+  /**
+   * Send daily reminders to users
+   */
+  async sendDailyReminders() {
+    try {
+      // Get all users with an email address
+      const users = await this._getUsersWithEmail();
+      
+      if (this.debug) {
+        console.log(`[Notification] Sending daily reminders to ${users.length} users`);
+      }
+      
+      let remindersSent = 0;
+      
+      for (const user of users) {
+        const sent = await this._sendReminderToUser(user);
+        if (sent) remindersSent++;
+      }
+      
+      if (this.debug) {
+        console.log(`[Notification] Daily reminders sent to ${remindersSent} users`);
+      }
+    } catch (error) {
+      console.error('[Notification] Error sending daily reminders:', error);
+    }
+  }
+
+  /**
+   * Send weekly report to a user
+   * @param {Object} user - User object
+   * @returns {Promise<boolean>} True if email was sent
+   */
+  async _sendWeeklyReportToUser(user) {
+    try {
+      if (!user.email) return false;
+      
+      // Get activity component
+      const activityComponent = this.getDependency('Activity');
+      
+      if (!activityComponent) {
+        console.error('[Notification] Activity component not available');
+        return false;
+      }
+      
+      // Get goal component
+      const goalComponent = this.getDependency('Goal');
+      
+      if (!goalComponent) {
+        console.error('[Notification] Goal component not available');
+        return false;
+      }
+      
+      // Get user's activities
+      const activities = await activityComponent.getAllActivities(user.user_id);
+      
+      // Get activity stats for the week
+      const activityStats = [];
+      
+      for (const activity of activities) {
+        // Get this week's stats
+        const thisWeek = await this._getWeeklyTotal(user.user_id, activity.activity_type_id);
+        
+        // Get last week's stats
+        const lastWeek = await this._getLastWeekTotal(user.user_id, activity.activity_type_id);
+        
+        // Calculate change
+        const change = thisWeek - lastWeek;
+        const percentChange = lastWeek > 0 ? Math.round((change / lastWeek) * 100) : 0;
+        
+        // Only include activities with data
+        if (thisWeek > 0 || lastWeek > 0) {
+          activityStats.push({
+            name: activity.name,
+            unit: activity.unit,
+            week: thisWeek,
+            lastWeek,
+            change: change > 0 ? `+${change}` : change,
+            percentChange,
+            changeColor: change >= 0 ? '#2ec4b6' : '#e63946'
+          });
+        }
+      }
+      
+      // If no activities with data, skip this user
+      if (activityStats.length === 0) {
+        return false;
+      }
+      
+      // Get user's goals
+      const goals = await goalComponent.getUserGoals(user.user_id);
+      
+      // Get goal progress
+      const goalStats = [];
+      
+      for (const goal of goals) {
+        const progress = await goalComponent.getGoalProgress(goal.goal_id);
+        
+        // Get activity info
+        const activity = await activityComponent.getActivityById(goal.activity_type_id);
+        
+        goalStats.push({
+          name: activity.name,
+          target: goal.target_count,
+          unit: activity.unit,
+          periodType: this._formatPeriodType(goal.period_type),
+          current: progress.currentCount,
+          progress: progress.progressPercent,
+          remaining: progress.remaining,
+          progressColor: progress.progressPercent >= 100 ? '#2ec4b6' : '#4361ee',
+          progressWidth: Math.min(100, progress.progressPercent)
+        });
+      }
+      
+      // Render and send weekly report email
+      const rendered = this._renderTemplate('weekly_report', {
+        username: user.username,
+        activities: activityStats,
+        goals: goalStats
+      });
+      
+      await this.sendEmail(user.email, rendered.subject, rendered.text, rendered.html);
+      
+      return true;
+    } catch (error) {
+      console.error(`[Notification] Error sending weekly report to user ${user.user_id}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Send reminder to a user
+   * @param {Object} user - User object
+   * @returns {Promise<boolean>} True if email was sent
+   */
+  async _sendReminderToUser(user) {
+    try {
+      // Implementation for daily reminders would go here
+      // This would check if the user has goals due today and send reminders
+      return false;
+    } catch (error) {
+      console.error(`[Notification] Error sending reminder to user ${user.user_id}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Get weekly total for an activity
+   * @param {number} userId - User ID
+   * @param {number} activityId - Activity ID
+   * @returns {Promise<number>} Total for the week
+   */
+  async _getWeeklyTotal(userId, activityId) {
+    try {
+      // Get this week's total (Sunday to Saturday)
+      const query = `
+        SELECT COALESCE(SUM(count), 0) as total
+        FROM activity_logs 
+        WHERE user_id = $1 
+          AND activity_type_id = $2 
+          AND logged_at >= DATE_TRUNC('week', CURRENT_DATE) 
+          AND logged_at < DATE_TRUNC('week', CURRENT_DATE) + INTERVAL '7 days'
+      `;
+      
+      const result = await this.db.query(query, [userId, activityId]);
+      return parseFloat(result.rows[0].total);
+    } catch (error) {
+      console.error('[Notification] Error getting weekly total:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Get last week's total for an activity
+   * @param {number} userId - User ID
+   * @param {number} activityId - Activity ID
+   * @returns {Promise<number>} Total for last week
+   */
+  async _getLastWeekTotal(userId, activityId) {
+    try {
+      // Get last week's total (previous Sunday to Saturday)
+      const query = `
+        SELECT COALESCE(SUM(count), 0) as total
+        FROM activity_logs 
+        WHERE user_id = $1 
+          AND activity_type_id = $2 
+          AND logged_at >= DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '7 days'
+          AND logged_at < DATE_TRUNC('week', CURRENT_DATE)
+      `;
+      
+      const result = await this.db.query(query, [userId, activityId]);
+      return parseFloat(result.rows[0].total);
+    } catch (error) {
+      console.error('[Notification] Error getting last week total:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Format period type for display
+   * @param {string} periodType - Period type
+   * @returns {string} Formatted period type
+   */
+  _formatPeriodType(periodType) {
+    switch (periodType) {
+      case 'daily':
+        return 'Daily';
+      case 'weekly':
+        return 'Weekly';
+      case 'monthly':
+        return 'Monthly';
+      case 'yearly':
+        return 'Yearly';
+      default:
+        return periodType;
+    }
+  }
+
+  /**
+   * Get user by ID
+   * @param {number} userId - User ID
+   * @returns {Promise<Object>} User object
+   */
+  async _getUserById(userId) {
+    try {
+      const query = 'SELECT * FROM users WHERE user_id = $1';
+      const result = await this.db.query(query, [userId]);
+      return result.rows[0];
+    } catch (error) {
+      console.error('[Notification] Error getting user by ID:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get all users with an email address
+   * @returns {Promise<Array>} Array of user objects
+   */
+  async _getUsersWithEmail() {
+    try {
+      const query = `
+        SELECT user_id, username, email 
+        FROM users 
+        WHERE email IS NOT NULL AND email <> ''
+      `;
+      
+      const result = await this.db.query(query);
+      return result.rows;
+    } catch (error) {
+      console.error('[Notification] Error getting users with email:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Shutdown the component
+   */
+  async _shutdown() {
+    // Clear all scheduled jobs
+    for (const [name, job] of this.scheduledJobs.entries()) {
+      if (name.endsWith('Timeout')) {
+        clearTimeout(job);
+      } else if (name.endsWith('Interval')) {
+        clearInterval(job);
+      }
+      
+      if (this.debug) {
+        console.log(`[Notification] Cleared scheduled job: ${name}`);
+      }
+    }
+    
+    this.scheduledJobs.clear();
+    
+    return true;
+  }
+}
+
+module.exports = NotificationComponent;

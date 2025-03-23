@@ -1,0 +1,380 @@
+/**
+ * Mock API for Actrak
+ * Provides fake API responses when the real API is unavailable
+ */
+(function() {
+    // Only enable in development mode or if API calls are failing
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        return;
+    }
+    
+    console.log('Mock API loaded');
+    
+    // Fake database
+    const db = {
+        users: [
+            { user_id: 1, username: 'demo', email: 'demo@example.com', password: 'password' }
+        ],
+        activities: [
+            { activity_type_id: 1, name: 'Running', unit: 'miles', user_id: 1 },
+            { activity_type_id: 2, name: 'Push-ups', unit: 'reps', user_id: 1 },
+            { activity_type_id: 3, name: 'Meditation', unit: 'minutes', user_id: 1 }
+        ],
+        logs: [
+            { log_id: 1, activity_type_id: 1, user_id: 1, count: 3.2, logged_at: new Date().toISOString(), notes: 'Morning run' },
+            { log_id: 2, activity_type_id: 2, user_id: 1, count: 50, logged_at: new Date().toISOString(), notes: 'After workout' },
+            { log_id: 3, activity_type_id: 3, user_id: 1, count: 15, logged_at: new Date().toISOString(), notes: 'Evening meditation' }
+        ],
+        goals: [
+            { 
+                goal_id: 1, 
+                activity_type_id: 1, 
+                user_id: 1, 
+                target_count: 20, 
+                period_type: 'weekly', 
+                start_date: new Date().toISOString(), 
+                end_date: new Date(Date.now() + 30*24*60*60*1000).toISOString(), 
+                activity_name: 'Running',
+                unit: 'miles'
+            }
+        ]
+    };
+    
+    // Save original fetch
+    const originalFetch = window.fetch;
+    
+    // Override fetch for API calls
+    window.fetch = async function(resource, options = {}) {
+        // Get URL
+        const url = resource.toString();
+        
+        // Only intercept API calls
+        if (!url.includes('/api/')) {
+            return originalFetch(resource, options);
+        }
+        
+        // Process API call
+        try {
+            const response = await processApiCall(url, options);
+            return response;
+        } catch (error) {
+            // If mock API fails, try real API
+            console.warn('Mock API failed, trying real API', error);
+            return originalFetch(resource, options);
+        }
+    };
+    
+    // Process API call
+    async function processApiCall(url, options) {
+        // Get method and path
+        const method = options.method || 'GET';
+        const path = url.replace(/^.*\/api/, '');
+        
+        // Get request body
+        let body = null;
+        if (options.body) {
+            try {
+                body = JSON.parse(options.body);
+            } catch (e) {
+                // Ignore parse errors
+            }
+        }
+        
+        // Wait a bit to simulate network delay
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Generate response based on path and method
+        let responseData;
+        let status = 200;
+        
+        if (path.startsWith('/auth/login') && method === 'POST') {
+            responseData = handleLogin(body);
+            if (!responseData) {
+                status = 401;
+                responseData = { error: 'Invalid credentials' };
+            }
+        } else if (path.match(/^\/activities\/\d+$/) && method === 'GET') {
+            const userId = parseInt(path.split('/').pop());
+            responseData = db.activities.filter(a => a.user_id === userId);
+        } else if (path === '/activities' && method === 'POST') {
+            responseData = handleCreateActivity(body);
+        } else if (path.match(/^\/logs\/\d+\/\d+$/) && method === 'GET') {
+            const parts = path.split('/');
+            const userId = parseInt(parts[parts.length - 2]);
+            const activityId = parseInt(parts[parts.length - 1]);
+            responseData = db.logs.filter(l => l.user_id === userId && l.activity_type_id === activityId);
+        } else if (path === '/logs' && method === 'POST') {
+            responseData = handleCreateLog(body);
+        } else if (path.match(/^\/logs\/\d+$/) && method === 'DELETE') {
+            const logId = parseInt(path.split('/').pop());
+            handleDeleteLog(logId);
+            responseData = { success: true };
+        } else if (path.match(/^\/logs\/stats\/\d+\/\d+$/) && method === 'GET') {
+            const parts = path.split('/');
+            const userId = parseInt(parts[parts.length - 2]);
+            const activityId = parseInt(parts[parts.length - 1]);
+            responseData = generateStats(userId, activityId);
+        } else if (path.match(/^\/goals\/\d+\/\d+$/) && method === 'GET') {
+            const parts = path.split('/');
+            const userId = parseInt(parts[parts.length - 2]);
+            const activityId = parseInt(parts[parts.length - 1]);
+            responseData = db.goals.filter(g => g.user_id === userId && g.activity_type_id === activityId);
+        } else if (path === '/goals' && method === 'POST') {
+            responseData = handleCreateGoal(body);
+        } else if (path.match(/^\/goals\/\d+$/) && method === 'PUT') {
+            const goalId = parseInt(path.split('/').pop());
+            responseData = handleUpdateGoal(goalId, body);
+        } else if (path.match(/^\/goals\/\d+$/) && method === 'DELETE') {
+            const goalId = parseInt(path.split('/').pop());
+            handleDeleteGoal(goalId);
+            responseData = { success: true };
+        } else if (path.match(/^\/goals\/progress\/\d+$/) && method === 'GET') {
+            const goalId = parseInt(path.split('/').pop());
+            responseData = generateGoalProgress(goalId);
+        } else {
+            status = 404;
+            responseData = { error: 'Not found' };
+        }
+        
+        // Create response
+        const response = new Response(JSON.stringify(responseData), {
+            status: status,
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        return response;
+    }
+    
+    // Handle login
+    function handleLogin(body) {
+        if (!body || !body.username || !body.password) {
+            return null;
+        }
+        
+        const user = db.users.find(u => u.username === body.username && u.password === body.password);
+        
+        if (!user) {
+            // For demo purposes, create a user if it doesn't exist
+            const newUser = {
+                user_id: db.users.length + 1,
+                username: body.username,
+                email: `${body.username}@example.com`,
+                password: body.password
+            };
+            
+            db.users.push(newUser);
+            
+            return {
+                user_id: newUser.user_id,
+                username: newUser.username,
+                email: newUser.email,
+                token: `demo_token_${Math.random().toString(36).substring(2)}`
+            };
+        }
+        
+        return {
+            user_id: user.user_id,
+            username: user.username,
+            email: user.email,
+            token: `demo_token_${Math.random().toString(36).substring(2)}`
+        };
+    }
+    
+    // Handle create activity
+    function handleCreateActivity(body) {
+        if (!body || !body.name || !body.unit) {
+            return { error: 'Invalid activity data' };
+        }
+        
+        const newActivity = {
+            activity_type_id: getNextId(db.activities, 'activity_type_id'),
+            name: body.name,
+            unit: body.unit,
+            user_id: body.userId || 1
+        };
+        
+        db.activities.push(newActivity);
+        
+        return newActivity;
+    }
+    
+    // Handle create log
+    function handleCreateLog(body) {
+        if (!body || !body.count || !body.activityTypeId) {
+            return { error: 'Invalid log data' };
+        }
+        
+        const newLog = {
+            log_id: getNextId(db.logs, 'log_id'),
+            activity_type_id: body.activityTypeId,
+            user_id: body.userId || 1,
+            count: body.count,
+            logged_at: body.loggedAt || new Date().toISOString(),
+            notes: body.notes || ''
+        };
+        
+        db.logs.push(newLog);
+        
+        return newLog;
+    }
+    
+    // Handle delete log
+    function handleDeleteLog(logId) {
+        const index = db.logs.findIndex(l => l.log_id === logId);
+        
+        if (index !== -1) {
+            db.logs.splice(index, 1);
+        }
+    }
+    
+    // Handle create goal
+    function handleCreateGoal(body) {
+        if (!body || !body.targetCount || !body.activityTypeId) {
+            return { error: 'Invalid goal data' };
+        }
+        
+        const activity = db.activities.find(a => a.activity_type_id === body.activityTypeId);
+        
+        const newGoal = {
+            goal_id: getNextId(db.goals, 'goal_id'),
+            activity_type_id: body.activityTypeId,
+            user_id: body.userId || 1,
+            target_count: body.targetCount,
+            period_type: body.periodType || 'weekly',
+            start_date: body.startDate || new Date().toISOString(),
+            end_date: body.endDate || new Date(Date.now() + 30*24*60*60*1000).toISOString(),
+            activity_name: activity ? activity.name : 'Activity',
+            unit: activity ? activity.unit : 'units'
+        };
+        
+        db.goals.push(newGoal);
+        
+        return newGoal;
+    }
+    
+    // Handle update goal
+    function handleUpdateGoal(goalId, body) {
+        const index = db.goals.findIndex(g => g.goal_id === goalId);
+        
+        if (index === -1) {
+            return { error: 'Goal not found' };
+        }
+        
+        const goal = db.goals[index];
+        
+        if (body.targetCount) goal.target_count = body.targetCount;
+        if (body.periodType) goal.period_type = body.periodType;
+        if (body.startDate) goal.start_date = body.startDate;
+        if (body.endDate) goal.end_date = body.endDate;
+        
+        return goal;
+    }
+    
+    // Handle delete goal
+    function handleDeleteGoal(goalId) {
+        const index = db.goals.findIndex(g => g.goal_id === goalId);
+        
+        if (index !== -1) {
+            db.goals.splice(index, 1);
+        }
+    }
+    
+    // Generate statistics for an activity
+    function generateStats(userId, activityId) {
+        const logs = db.logs.filter(l => l.user_id === userId && l.activity_type_id === activityId);
+        
+        // Get current date info
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const startOfYear = new Date(now.getFullYear(), 0, 1);
+        
+        // Calculate stats
+        const todayCount = logs
+            .filter(l => new Date(l.logged_at) >= today)
+            .reduce((sum, log) => sum + log.count, 0);
+            
+        const weekCount = logs
+            .filter(l => new Date(l.logged_at) >= startOfWeek)
+            .reduce((sum, log) => sum + log.count, 0);
+            
+        const monthCount = logs
+            .filter(l => new Date(l.logged_at) >= startOfMonth)
+            .reduce((sum, log) => sum + log.count, 0);
+            
+        const yearCount = logs
+            .filter(l => new Date(l.logged_at) >= startOfYear)
+            .reduce((sum, log) => sum + log.count, 0);
+        
+        return {
+            today: todayCount.toFixed(1),
+            week: weekCount.toFixed(1),
+            month: monthCount.toFixed(1),
+            year: yearCount.toFixed(1)
+        };
+    }
+    
+    // Generate goal progress
+    function generateGoalProgress(goalId) {
+        const goal = db.goals.find(g => g.goal_id === goalId);
+        
+        if (!goal) {
+            return {
+                currentCount: 0,
+                targetCount: 100,
+                progressPercent: 0,
+                remaining: 100,
+                completed: false
+            };
+        }
+        
+        // Get logs for this activity
+        const logs = db.logs.filter(l => 
+            l.activity_type_id === goal.activity_type_id && 
+            l.user_id === goal.user_id &&
+            new Date(l.logged_at) >= new Date(goal.start_date) &&
+            new Date(l.logged_at) <= new Date(goal.end_date)
+        );
+        
+        // Calculate current count
+        const currentCount = logs.reduce((sum, log) => sum + log.count, 0);
+        
+        // Calculate progress percentage
+        const progressPercent = Math.min(100, Math.round((currentCount / goal.target_count) * 100));
+        
+        // Calculate remaining
+        const remaining = Math.max(0, goal.target_count - currentCount);
+        
+        return {
+            currentCount: currentCount.toFixed(1),
+            targetCount: goal.target_count,
+            progressPercent: progressPercent,
+            remaining: remaining.toFixed(1),
+            completed: progressPercent >= 100,
+            startDate: goal.start_date,
+            endDate: goal.end_date
+        };
+    }
+    
+    // Get next ID for a collection
+    function getNextId(collection, idField) {
+        const ids = collection.map(item => item[idField]);
+        return ids.length > 0 ? Math.max(...ids) + 1 : 1;
+    }
+    
+    // Make mock API available globally
+    window.mockApi = {
+        db,
+        clearData: function() {
+            db.logs = [];
+            db.goals = [];
+        },
+        addData: function(collection, data) {
+            db[collection].push(data);
+        }
+    };
+})();
