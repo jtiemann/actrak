@@ -49,6 +49,8 @@ class GoalsManager {
       return;
     }
     
+    console.log("[GoalsManager] Initializing for activity:", activity);
+    
     // Store current activity
     this.currentActivity = activity;
     
@@ -95,7 +97,7 @@ class GoalsManager {
   setupEventListeners() {
     // Skip if no form elements found
     if (!this.elements.form || !this.elements.addButton) {
-      console.error('Required goal form elements not found');
+      console.error('[GoalsManager] Required goal form elements not found');
       return;
     }
     
@@ -144,24 +146,73 @@ class GoalsManager {
     try {
       // Skip if no current activity
       if (!this.currentActivity) {
+        console.warn('[GoalsManager] No current activity, skipping goal load');
         this.goals = [];
         return;
       }
       
+      console.log('[GoalsManager] Loading goals for activity:', this.currentActivity.activity_type_id);
+      
+      // Get current user information for debugging
+      const currentUser = window.authManager ? 
+          window.authManager.getUser() : 
+          JSON.parse(localStorage.getItem('currentUser'));
+      
+      console.log('[GoalsManager] Current user:', currentUser);
+      
       // Use API client if available
       if (window.apiClient) {
-        this.goals = await window.apiClient.getActivityGoals(
-          this.currentActivity.activity_type_id
-        );
+        console.log(`[GoalsManager] Calling apiClient.getActivityGoals(${this.currentActivity.activity_type_id})`);
+        try {
+          this.goals = await window.apiClient.getActivityGoals(
+            this.currentActivity.activity_type_id
+          );
+          console.log('[GoalsManager] Goals loaded from API client:', this.goals);
+        } catch (error) {
+          console.error('[GoalsManager] API client error:', error);
+          
+          // Fallback to direct fetch
+          console.log('[GoalsManager] Falling back to direct fetch');
+          if (currentUser) {
+            const userId = currentUser.id || currentUser.user_id;
+            const token = currentUser.token || (window.authManager ? window.authManager.getToken() : null);
+            
+            try {
+              const response = await fetch(`/api/goals/${userId}/${this.currentActivity.activity_type_id}`, {
+                headers: {
+                  'Authorization': `Bearer ${token}`
+                }
+              });
+              
+              console.log('[GoalsManager] Direct fetch response:', response.status, response.statusText);
+              
+              if (!response.ok) {
+                const errorData = await response.text();
+                console.error('[GoalsManager] Fetch error:', errorData);
+                throw new Error('Failed to load goals');
+              }
+              
+              this.goals = await response.json();
+              console.log('[GoalsManager] Goals loaded from direct fetch:', this.goals);
+            } catch (fetchError) {
+              console.error('[GoalsManager] Direct fetch failed:', fetchError);
+              this.goals = []; // Set empty array on error
+            }
+          }
+        }
       } else {
         // Direct API call if no client available
+        console.log('[GoalsManager] No API client available, using direct fetch');
         const currentUser = window.authManager ? window.authManager.getUser() : JSON.parse(localStorage.getItem('currentUser'));
         if (!currentUser) {
+          console.error('[GoalsManager] User not authenticated');
           throw new Error('User not authenticated');
         }
         
         const userId = currentUser.id || currentUser.user_id;
         const token = window.authManager ? window.authManager.getToken() : currentUser.token;
+        
+        console.log(`[GoalsManager] Fetching from /api/goals/${userId}/${this.currentActivity.activity_type_id}`);
         
         const response = await fetch(`/api/goals/${userId}/${this.currentActivity.activity_type_id}`, {
           headers: {
@@ -169,20 +220,28 @@ class GoalsManager {
           }
         });
         
+        console.log('[GoalsManager] Direct fetch response:', response.status, response.statusText);
+        
         if (!response.ok) {
+          const errorData = await response.text();
+          console.error('[GoalsManager] Fetch error:', errorData);
           throw new Error('Failed to load goals');
         }
         
         this.goals = await response.json();
+        console.log('[GoalsManager] Goals loaded from direct fetch:', this.goals);
       }
       
       // Ensure goals is always an array
       if (!Array.isArray(this.goals)) {
-        console.warn('Goals response is not an array, converting to empty array');
+        console.warn('[GoalsManager] Goals response is not an array, converting to empty array');
         this.goals = [];
       }
+      
+      // Log the goal count
+      console.log(`[GoalsManager] Loaded ${this.goals.length} goals for activity ${this.currentActivity.name}`);
     } catch (error) {
-      console.error('Error loading goals:', error);
+      console.error('[GoalsManager] Error loading goals:', error);
       this.goals = [];
     }
   }
@@ -193,7 +252,7 @@ class GoalsManager {
   showAddGoalForm() {
     // Skip if no form container
     if (!this.elements.container) {
-      console.error('Goal form container not found');
+      console.error('[GoalsManager] Goal form container not found');
       return;
     }
     
@@ -400,7 +459,7 @@ class GoalsManager {
       const message = mode === 'add' ? 'Goal added successfully!' : 'Goal updated successfully!';
       this.showMessage(message, 'success');
     } catch (error) {
-      console.error('Error saving goal:', error);
+      console.error('[GoalsManager] Error saving goal:', error);
       this.showMessage('Error saving goal: ' + error.message, 'error');
     } finally {
       // Reset button state
@@ -452,7 +511,7 @@ class GoalsManager {
       // Show success message
       this.showMessage('Goal deleted successfully!', 'success');
     } catch (error) {
-      console.error('Error deleting goal:', error);
+      console.error('[GoalsManager] Error deleting goal:', error);
       this.showMessage('Error deleting goal: ' + error.message, 'error');
     }
   }
@@ -497,7 +556,7 @@ class GoalsManager {
       
       // Set goal values
       if (this.elements.targetInput) {
-        this.elements.targetInput.value = goal.target_count;
+        this.elements.targetInput.value = goal.target_value;
       }
       
       if (this.elements.periodTypeSelect) {
@@ -516,7 +575,7 @@ class GoalsManager {
       this.elements.container.classList.remove('hidden');
       this.elements.container.style.display = 'flex';
     } catch (error) {
-      console.error('Error showing edit form:', error);
+      console.error('[GoalsManager] Error showing edit form:', error);
       this.showMessage('Error loading goal data: ' + error.message, 'error');
     }
   }
@@ -527,7 +586,7 @@ class GoalsManager {
   renderGoals() {
     // Skip if no goals container
     if (!this.elements.goalsContainer) {
-      console.error('Goals container not found');
+      console.error('[GoalsManager] Goals container not found');
       return;
     }
     
@@ -536,6 +595,7 @@ class GoalsManager {
     
     // Check if we have goals
     if (!this.goals || !Array.isArray(this.goals) || this.goals.length === 0) {
+      console.log('[GoalsManager] No goals to render, showing empty state');
       this.elements.goalsContainer.innerHTML = `
         <div class="empty-state">
           <p>No goals set yet. Click "Add Goal" to create one!</p>
@@ -543,6 +603,8 @@ class GoalsManager {
       `;
       return;
     }
+    
+    console.log(`[GoalsManager] Rendering ${this.goals.length} goals`);
     
     // Render each goal
     for (let i = 0; i < this.goals.length; i++) {
@@ -561,12 +623,14 @@ class GoalsManager {
         return;
       }
       
+      console.log(`[GoalsManager] Rendering goal:`, goal);
+      
       // Default progress values if we can't fetch from server
       let progress = {
         currentCount: 0,
-        targetCount: goal.target_count || 100,
+        targetCount: goal.target_value || 100,
         progressPercent: 0,
-        remaining: goal.target_count || 100,
+        remaining: goal.target_value || 100,
         completed: false,
         startDate: new Date(goal.start_date),
         endDate: new Date(goal.end_date)
@@ -577,7 +641,9 @@ class GoalsManager {
         try {
           // Get goal progress
           if (window.apiClient) {
+            console.log(`[GoalsManager] Fetching progress for goal ${goal.goal_id}`);
             const progressData = await window.apiClient.getGoalProgress(goal.goal_id);
+            console.log(`[GoalsManager] Progress data:`, progressData);
             if (progressData && !progressData.error) {
               progress = progressData;
             }
@@ -604,7 +670,7 @@ class GoalsManager {
             }
           }
         } catch (error) {
-          console.error('Error loading goal progress:', error);
+          console.error('[GoalsManager] Error loading goal progress:', error);
           // Keep using the default progress object
         }
       }
@@ -625,7 +691,7 @@ class GoalsManager {
       // Build HTML
       goalElement.innerHTML = `
         <div class="goal-header">
-          <h3>${goal.activity_name || 'Activity'} Goal <span class="${badgeClass}">${this.formatPeriodType(goal.period_type)}</span></h3>
+          <h3>${goal.activity_name || this.currentActivity.name} Goal <span class="${badgeClass}">${this.formatPeriodType(goal.period_type)}</span></h3>
           <div class="goal-actions">
             <button class="btn-sm btn-edit" data-id="${goal.goal_id}" aria-label="Edit goal">
               <i class="fas fa-edit"></i>
@@ -638,7 +704,7 @@ class GoalsManager {
         <div class="goal-details">
           <div class="goal-target">
             <span class="goal-label">Target:</span>
-            <span class="goal-value">${goal.target_count} ${goal.unit || 'units'}</span>
+            <span class="goal-value">${goal.target_value} ${this.currentActivity ? this.currentActivity.unit : (goal.unit || 'units')}</span>
           </div>
           <div class="goal-period">
             <span class="goal-label">Period:</span>
@@ -651,7 +717,7 @@ class GoalsManager {
         </div>
         <div class="goal-progress">
           <div class="progress-label">
-            <span>Progress: ${progress.currentCount} / ${progress.targetCount} ${goal.unit || 'units'}</span>
+            <span>Progress: ${progress.currentCount} / ${progress.targetCount} ${this.currentActivity ? this.currentActivity.unit : (goal.unit || 'units')}</span>
             <span>${progress.progressPercent}%</span>
           </div>
           <div class="progress-bar">
@@ -660,7 +726,7 @@ class GoalsManager {
           <div class="progress-status">
             ${progress.completed ? 
               '<span class="status-completed"><i class="fas fa-check-circle"></i> Goal Completed!</span>' :
-              `<span class="status-remaining">${progress.remaining} ${goal.unit || 'units'} remaining</span>`
+              `<span class="status-remaining">${progress.remaining} ${this.currentActivity ? this.currentActivity.unit : (goal.unit || 'units')} remaining</span>`
             }
           </div>
         </div>
@@ -686,7 +752,7 @@ class GoalsManager {
       // Add to container
       this.elements.goalsContainer.appendChild(goalElement);
     } catch (error) {
-      console.error('Error rendering goal:', error);
+      console.error('[GoalsManager] Error rendering goal:', error);
     }
   }
 

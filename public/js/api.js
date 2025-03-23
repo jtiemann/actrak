@@ -829,6 +829,7 @@ class ApiClient {
    * @returns {Promise<Object>} Progress data
    */
   async getGoalProgress(goalId) {
+    // Updated to use the correct endpoint path that matches the server route
     return this.request(`/goals/progress/${goalId}`);
   }
 }

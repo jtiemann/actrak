@@ -108,8 +108,8 @@ class ActivityComponent extends Component {
         return cached.data;
       }
       
-      // Get from database - Fixed table name from activity_typesto activities
-      const query = 'SELECT * FROM activity_typesWHERE user_id = $1 ORDER BY name';
+      // Get from database - Fixed table name and added space between table name and WHERE
+      const query = 'SELECT * FROM activity_types WHERE user_id = $1 ORDER BY name';
       const result = await this.db.query(query, [userId]);
       
       // Update cache
@@ -140,8 +140,8 @@ class ActivityComponent extends Component {
         return cached.data;
       }
       
-      // Get from database - Fixed table name from activity_typesto activities
-      const query = 'SELECT * FROM activity_typesWHERE activity_type_id = $1';
+      // Get from database - Fixed table name and added space between table name and WHERE
+      const query = 'SELECT * FROM activity_types WHERE activity_type_id = $1';
       const result = await this.db.query(query, [activityId]);
       
       const activity = result.rows[0];
@@ -174,7 +174,7 @@ class ActivityComponent extends Component {
     try {
       console.log('[Activity] Creating activity:', { userId, name, unit, isPublic, category });
       
-      // Create activity in database - Fixed table name from activity_typesto activities
+      // Create activity in database
       // Include category in the insert
       const query = `
         INSERT INTO activity_types(user_id, name, unit, is_public, category) 
@@ -303,7 +303,7 @@ class ActivityComponent extends Component {
       let query = 'SELECT * FROM activity_logs WHERE user_id = $1';
       const params = [userId];
       
-      // Add activity filter if provided - Fixed column name
+      // Add activity filter if provided
       if (activityId) {
         query += ' AND activity_type_id = $' + (params.length + 1);
         params.push(activityId);
@@ -356,7 +356,7 @@ class ActivityComponent extends Component {
         throw new Error('Activity does not belong to user');
       }
       
-      // Create log in database - Fixed column name
+      // Create log in database
       const query = `
         INSERT INTO activity_logs (user_id, activity_type_id, count, notes, logged_at) 
         VALUES ($1, $2, $3, $4, $5) 
@@ -521,7 +521,7 @@ class ActivityComponent extends Component {
           dateGroup = 'DATE(logged_at)';
       }
       
-      // Query for activity stats - Fixed column name
+      // Query for activity stats
       const query = `
         SELECT 
           ${dateGroup} AS period,

@@ -17,8 +17,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (activitySelector) {
       const activityId = parseInt(activitySelector.value);
       if (activityId) {
-        // If we have activity_typesglobally, find the matching one
-        if (window.activity_types&& Array.isArray(window.activity_types)) {
+        // If we have activity_types globally, find the matching one
+        if (window.activity_types && Array.isArray(window.activity_types)) {
           return window.activity_types.find(a => a.activity_type_id === activityId);
         }
       }
@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Try to get from URL
     const urlParams = new URLSearchParams(window.location.search);
     const activityIdFromUrl = urlParams.get('activityId');
-    if (activityIdFromUrl && window.activity_types&& Array.isArray(window.activity_types)) {
+    if (activityIdFromUrl && window.activity_types && Array.isArray(window.activity_types)) {
       const activity = window.activity_types.find(a => a.activity_type_id === parseInt(activityIdFromUrl));
       if (activity) {
         return activity;
@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Default to first activity if available
-    if (window.activity_types&& Array.isArray(window.activity_types) && window.activity_types.length > 0) {
+    if (window.activity_types && Array.isArray(window.activity_types) && window.activity_types.length > 0) {
       return window.activity_types[0];
     }
     
@@ -98,7 +98,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Initialize when the page loads
   initializeGoalsManager();
   
-  // Also initialize when activity_typesare loaded
+  // Also initialize when activity_types are loaded
   document.addEventListener('activity_typesLoaded', function() {
     initializeGoalsManager();
   });

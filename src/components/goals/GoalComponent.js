@@ -376,12 +376,33 @@ class GoalComponent extends Component {
         throw new Error('Goal not found');
       }
       
+      // Get activity details to check units
+      const activity = await this.activityComponent.getActivityById(goal.activity_type_id);
+      
+      if (!activity) {
+        throw new Error('Activity not found');
+      }
+      
+      // Log for debugging
+      console.log('[Goal] Getting progress for goal:', {
+        goalId,
+        activity: activity.name,
+        unit: activity.unit,
+        periodType: goal.period_type
+      });
+      
       // Calculate date range based on period type
       const { startDate, endDate } = this._calculatePeriodDates(goal.period_type, goal.start_date, goal.end_date);
       
+      console.log('[Goal] Date range:', {
+        periodType: goal.period_type,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString()
+      });
+      
       // Get activity logs for the period
       const query = `
-        SELECT COALESCE(SUM(count), 0) as total
+        SELECT COALESCE(SUM(count), 0) as total, COUNT(*) as entries
         FROM activity_logs
         WHERE user_id = $1
           AND activity_type_id = $2
@@ -396,14 +417,30 @@ class GoalComponent extends Component {
         endDate
       ]);
       
+      console.log('[Goal] Activity logs found:', result.rows[0]);
+      
+      // Extract values
       const currentCount = parseFloat(result.rows[0].total);
+      const entryCount = parseInt(result.rows[0].entries);
       const targetCount = goal.target_value;
-      const progressPercent = Math.round((currentCount / targetCount) * 100);
+      
+      // Calculate progress
+      const progressPercent = Math.min(100, Math.round((currentCount / targetCount) * 100));
       const completed = progressPercent >= 100;
       const remaining = Math.max(0, targetCount - currentCount);
       
+      console.log('[Goal] Progress calculated:', {
+        currentCount,
+        entryCount,
+        targetCount,
+        progressPercent,
+        completed,
+        remaining
+      });
+      
       return {
         currentCount,
+        entryCount,
         targetCount,
         progressPercent,
         remaining,
@@ -449,55 +486,82 @@ class GoalComponent extends Component {
     const now = new Date();
     let periodStartDate, periodEndDate;
     
-    // Use goal dates if provided
-    if (startDate) {
-      periodStartDate = new Date(startDate);
-    } else {
-      periodStartDate = new Date();
-      periodStartDate.setHours(0, 0, 0, 0);
+    // Convert startDate and endDate to Date objects if they're strings
+    if (typeof startDate === 'string') {
+      startDate = new Date(startDate);
     }
     
-    if (endDate) {
-      periodEndDate = new Date(endDate);
-    } else {
-      // Calculate end date based on period type if not provided
-      periodEndDate = new Date();
-      
-      switch (periodType) {
-        case 'daily':
-          // End of today
-          periodEndDate.setHours(23, 59, 59, 999);
-          break;
-        case 'weekly':
-          // End of current week (Sunday)
-          const dayOfWeek = periodEndDate.getDay();
-          const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-          periodEndDate.setDate(periodEndDate.getDate() + daysUntilSunday);
-          periodEndDate.setHours(23, 59, 59, 999);
-          break;
-        case 'monthly':
-          // End of current month
-          periodEndDate = new Date(
-            periodEndDate.getFullYear(),
-            periodEndDate.getMonth() + 1,
-            0, // Last day of current month
-            23, 59, 59, 999
-          );
-          break;
-        case 'yearly':
-          // End of current year
-          periodEndDate = new Date(
-            periodEndDate.getFullYear(),
-            11, // December
-            31, // Last day of December
-            23, 59, 59, 999
-          );
-          break;
-        default:
-          // Default to end of day
-          periodEndDate.setHours(23, 59, 59, 999);
-      }
+    if (typeof endDate === 'string') {
+      endDate = new Date(endDate);
     }
+    
+    switch (periodType) {
+      case 'daily':
+        // For daily goals, we're interested in the current day only
+        periodStartDate = new Date(now);
+        periodStartDate.setHours(0, 0, 0, 0); // Start of today
+        
+        periodEndDate = new Date(now);
+        periodEndDate.setHours(23, 59, 59, 999); // End of today
+        break;
+        
+      case 'weekly':
+        // For weekly goals
+        periodStartDate = new Date(now);
+        // Get the first day of the week (Sunday = 0)
+        const dayOfWeek = periodStartDate.getDay();
+        // Set to the beginning of the week (Sunday)
+        periodStartDate.setDate(periodStartDate.getDate() - dayOfWeek);
+        periodStartDate.setHours(0, 0, 0, 0);
+        
+        periodEndDate = new Date(periodStartDate);
+        // End of Saturday (6 days after Sunday)
+        periodEndDate.setDate(periodEndDate.getDate() + 6);
+        periodEndDate.setHours(23, 59, 59, 999);
+        break;
+        
+      case 'monthly':
+        // For monthly goals
+        periodStartDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0); // Start of month
+        periodEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999); // End of month
+        break;
+        
+      case 'yearly':
+        // For yearly goals
+        periodStartDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0); // Start of year
+        periodEndDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999); // End of year
+        break;
+        
+      default:
+        // For custom period, use goal start and end dates
+        if (startDate) {
+          periodStartDate = new Date(startDate);
+        } else {
+          periodStartDate = new Date(now);
+          periodStartDate.setHours(0, 0, 0, 0);
+        }
+        
+        if (endDate) {
+          periodEndDate = new Date(endDate);
+        } else {
+          periodEndDate = new Date(now);
+          periodEndDate.setHours(23, 59, 59, 999);
+        }
+    }
+    
+    // Ensure we don't go beyond the goal's date range
+    if (startDate && periodStartDate < startDate) {
+      periodStartDate = new Date(startDate);
+    }
+    
+    if (endDate && periodEndDate > endDate) {
+      periodEndDate = new Date(endDate);
+    }
+    
+    console.log('[Goal] Final period dates:', {
+      periodStartDate,
+      periodEndDate
+    });
     
     return {
       startDate: periodStartDate,
